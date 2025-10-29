@@ -199,8 +199,65 @@ nfd-worker-l6jc6                         1/1     Running   7          6d5h
 ## Configuring SRIOV Operator
 
 ~~~bash
-
+$ cat <<EOF > sriov-operator-config.yaml 
+apiVersion: sriovnetwork.openshift.io/v1
+kind: SriovOperatorConfig
+metadata:
+  name: default
+  namespace: openshift-sriov-network-operator
+spec:
+  enableInjector: true
+  enableOperatorWebhook: true
+  logLevel: 2
+EOF
 ~~~
 
+~~~bash
+$ oc create -f sriov-operator-config.yaml 
+sriovoperatorconfig.sriovnetwork.openshift.io/default created
+~~~
+
+~~~bash
+$ oc get pods -n openshift-sriov-network-operator
+NAME                                      READY   STATUS    RESTARTS   AGE
+network-resources-injector-m4t8k          1/1     Running   0          49s
+operator-webhook-w9k8n                    1/1     Running   0          49s
+sriov-network-config-daemon-ql4cl         1/1     Running   0          49s
+sriov-network-operator-5995bb94f6-qbsgd   1/1     Running   0          18m
+~~~
+
+~~~bash
+oc patch sriovoperatorconfig default --type=merge -n openshift-sriov-network-operator --patch '{ "spec": { "configDaemonNodeSelector": { "network.nvidia.com/operator.mofed.wait": "false", "node-role.kubernetes.io/master": "", "feature.node.kubernetes.io/pci-15b3.sriov.capable": "true" } } }'
+~~~
+
+## Configuring NMState Operator
+
+~~~bash
+$ cat <<EOF > nmstate-instance.yaml 
+apiVersion: nmstate.io/v1
+kind: NMState
+metadata:
+  name: nmstate
+EOF
+~~~
+
+~~~bash
+$ oc create -f nmstate-instance.yaml
+nmstate.nmstate.io/nmstate created
+~~~
+
+~~~bash
+$ oc get pods -n openshift-nmstate
+NAME                                     READY   STATUS    RESTARTS   AGE
+nmstate-console-plugin-8dcf98f9b-stx5x   0/1     Running   0          10s
+nmstate-handler-zwhpt                    0/1     Running   0          10s
+nmstate-metrics-767cb6c678-bx5ln         1/2     Running   0          10s
+nmstate-operator-78777d7db8-5frht        1/1     Running   0          21m
+nmstate-webhook-676f7797c4-h4nl6         0/1     Running   0          10s
+~~~
+
+## Configuring NVIDIA Network Operator
+
+## Configuring NVIDIA GPU Operator
 
 ## Enable Offloading in OVS
