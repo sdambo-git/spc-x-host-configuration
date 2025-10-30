@@ -18,7 +18,7 @@
 - [Configuring LLDPD Daemonset](#configuring-lldpd-daemonset)
 - [Configuring OVS Offload](#configuring-ovs-offload)
 - [Configure Physical Rail Interface Attributes](#configure-physical-rail-interface-attributes)
-- [Configure Bridges and Flows](#configure-bridges-and-flows)
+- [Configure Bridges and OVS Flows](#configure-bridges-and-ovs-flows)
 
 
 ## Environment
@@ -497,7 +497,7 @@ spec:
 
 ~~~
 
-## Enable Offloading in OVS
+## Configuring OVS Offload
 
 In OpenShift we can achieve OVS offload by creating an SriovNetworkPoolConfig and apply it to node.
 
