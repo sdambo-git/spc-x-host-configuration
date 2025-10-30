@@ -497,6 +497,8 @@ spec:
 
 ~~~
 
+## Configuring LLDPD Daemonset
+
 ## Configuring OVS Offload
 
 In OpenShift we can achieve OVS offload by creating an SriovNetworkPoolConfig and apply it to node.
