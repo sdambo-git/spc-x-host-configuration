@@ -18,7 +18,7 @@
 - [Configuring LLDPD Daemonset](#configuring-lldpd-daemonset)
 - [Configuring OVS Offload](#configuring-ovs-offload)
 - [Configure Physical Rail Interface Attributes](#configure-physical-rail-interface-attributes)
-- [Configuring Bridges and Flows](#configuring-bridges-and-flows)
+- [Configure Bridges and Flows](#configure-bridges-and-flows)
 
 
 ## Environment
