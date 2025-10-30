@@ -499,6 +499,77 @@ spec:
 
 ## Configuring LLDPD Daemonset
 
+To run our lldpd container daemonset we will need to provide a service account with privilege access similar to what we do with NMState.   The first step is to create a service account we will simply call lldp.  In this example I am creating it under the nvidia-network-operator namespace.  First craft the custom resource file.
+
+~~~bash
+$ cat <<EOF > lldp-serviceaccount.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: lldp
+  namespace: nvidia-network-operator
+EOF
+~~~
+
+Then use the custom resource file to create the service account on the cluster.
+
+~~~bash
+$ oc create -f lldp-serviceaccount.yaml 
+serviceaccount/lldp created
+~~~
+
+Once the service account is created we can apply the privileges to it.
+
+~~~bash
+$ oc -n nvidia-network-operator adm policy add-scc-to-user privileged -z lldp
+clusterrole.rbac.authorization.k8s.io/system:openshift:scc:privileged added: "lldp"
+~~~
+
+With our service account created and given the permissision it needs we can now focus on creating our lldpd daemonset.   This daemonset will live in the nvidia-network-operator namespace as well.  Further in this example I am assiging a secondary resource to enable a secondary interface that is connected to the Spectrum-X switch.  That way we can demonsrate the sending and recieving of lldp packets.  Create the below custom resource file and modify as necessary for the environment.
+
+~~~bash
+$ cat <<EOF > lldpd-daemonset.yaml 
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: lldpd-container
+  namespace: nvidia-network-operator
+  labels:
+    app: lldpd
+spec:
+  selector:
+    matchLabels:
+      app: lldpd
+  template:
+    metadata:
+      labels:
+        app: lldpd
+    spec:
+      serviceAccountName: lldp
+      hostNetwork: true
+      containers:
+        - name: lldpd-container
+          image: quay.io/redhat_emp1/ecosys-nvidia/lldpd-arm64:0.0.5
+          securityContext:
+            privileged: true
+EOF
+~~~
+
+Once we have created the daemonset custom resource file we can create it on the cluster.
+
+~~~bash
+$ oc create -f lldpd-daemonset.yaml 
+daemonset.apps/lldpd-container created
+~~~
+
+We can validate it is running by looking at the pods in the nvidia-network-operator namespace.
+
+~~~bash
+$ oc get pods -n nvidia-network-operator -l app=lldpd -o wide
+NAME                    READY   STATUS    RESTARTS   AGE     IP            NODE                                       NOMINATED NODE   READINESS GATES
+lldpd-container-hhslt   1/1     Running   0          4m42s   10.6.135.15   nvd-srv-36.nvidia.eng.rdu2.dc.redhat.com   <none>           <none>
+~~~
+
 ## Configuring OVS Offload
 
 In OpenShift we can achieve OVS offload by creating an SriovNetworkPoolConfig and apply it to node.
