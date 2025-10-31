@@ -799,7 +799,14 @@ lldpd-container-hhslt   1/1     Running   0          4m42s   10.6.135.15   nvd-s
 
 ## Configuring OVS Offload
 
-In OpenShift we can achieve OVS offload by creating an SriovNetworkPoolConfig and apply it to node.
+Before we configure OVS Offload let's disable Mellanox plugin.
+
+~~~bash
+$ oc patch sriovoperatorconfigs.sriovnetwork.openshift.io -n openshift-sriov-network-operator default --patch '{ "spec": { "disablePlugins": ["mellanox"] } }' --type='merge'
+sriovoperatorconfig.sriovnetwork.openshift.io/default patched
+~~~
+
+In OpenShift we can achieve OVS offload by creating an SriovNetworkPoolConfig and apply it to node.  Note this will not work on a SNO node it seems.
 
 ~~~bash
 $ cat <<EOF > sriovnetworkpoolconfig-offload.yaml
