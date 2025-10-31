@@ -490,6 +490,10 @@ spec:
 EOF
 ~~~
 
+~~~bash
+
+~~~
+
 The NicConfigurationTemplate file will instruct the Nic Configuration Operator how to configure the network cards  
 
 ~~~bash
@@ -515,6 +519,10 @@ spec:
       version: RA2.0
       overlay: none
 EOF
+~~~
+
+~~~bash
+
 ~~~
 
 ## Configuring NVIDIA GPU Operator
@@ -829,18 +837,36 @@ $ cat <<EOF > rail-example-sriovnetworknodepolicy.yaml
 apiVersion: sriovnetwork.openshift.io/v1
 kind: SriovNetworkNodePolicy
 metadata:
-  name: rail-x
+  name: snnp-eth_rail1
   namespace: openshift-sriov-network-operator
 spec:
   deviceType: netdevice
   eSwitchMode: "switchdev"
   mtu: 9216
   nicSelector:
-    pfNames: ["eth_rail(x)"]
+    pfNames: ["eth_rail1"]
   numVfs: 1
   isRdma: true
   linkType: eth
-  resourceName: rail-x
+  resourceName: eth_rail1
+  nodeSelector:
+    feature.node.kubernetes.io/network-sriov.capable: "true"
+---
+apiVersion: sriovnetwork.openshift.io/v1
+kind: SriovNetworkNodePolicy
+metadata:
+  name: snnp-eth_rail2
+  namespace: openshift-sriov-network-operator
+spec:
+  deviceType: netdevice
+  eSwitchMode: "switchdev"
+  mtu: 9216
+  nicSelector:
+    pfNames: ["eth_rail2"]
+  numVfs: 1
+  isRdma: true
+  linkType: eth
+  resourceName: eth_rail2
   nodeSelector:
     feature.node.kubernetes.io/network-sriov.capable: "true"
 EOF
