@@ -23,7 +23,7 @@
 
 ## Environment
 
-The host environment for this document was a single GH200 node running OpenShift 4.20.  The NFD, SR-IOV, NMState, NVIDIA Network, NVIDIA Maintenance and NVIDIA GPU operators were all installed but need to be configured.
+The host environment for this document was a single GH200 node running OpenShift 4.20 with Local Volume Storage Operator already configured.  The NFD, SR-IOV, NMState, NVIDIA Network, NVIDIA Maintenance and NVIDIA GPU operators were all installed but need to be configured.
 
 ## Set Core User Password for Troubleshooting
 
@@ -75,6 +75,9 @@ worker   rendered-worker-d853a15275615906b9d23f4a28e007f4   True      False     
 Before completing this section make sure to test that it is possible to login as the core user on the BMC console as the password that was set.
 
 ## Set Hugepages and IOMMU Off
+
+We need to set hughpages and disable iommu.  This can be achieved with the following machine configuration.
+
 ~~~bash
 $ cat <<EOF > 99-machineconfig-nvd-srv-36.yaml
 apiVersion: machineconfiguration.openshift.io/v1
@@ -92,12 +95,18 @@ spec:
 EOF
 ~~~
 
+Create the machine configuration on the cluster.  This will cause nodes to reboot in a rolling fashion and can be monitored with `oc get mcp`.
+
 ~~~bash
 $ oc create -f 99-machineconfig-nvd-srv-36.yaml
 machineconfig.machineconfiguration.openshift.io/99-master-nvd-srv-36 created
 ~~~
 
+To validate this has been configured we can use `dmesg` output and `oc describe node` to see iommu and hughpages are set.
+
 ## Set UDEV Rules for Rail Device Names
+
+We need to use udev rules to normalize the interface names on each node to eth_rail or roce_rail for ethernet and infiniband respectively.   We can do this by creating a persistent udev rules file indicating the devices which should be the same across all worker nodes in a homogenous cluster.   Below is an example of what that file might look like.  On the GH200 node we only have two interfaces to work with but it gives you an idea.
 
 ~~~bash
 $ cat <<EOF > 70-persistent-net.rules 
@@ -109,9 +118,13 @@ ACTION=="add", KERNELS=="0002:01:00.1", SUBSYSTEM=="infiniband", PROGRAM="rdma_r
 EOF
 ~~~
 
+Once we have the udev file created we need to base64 encoded it to prepare it for a machine configuration.  Below will base64 encoded it and then assign it to the variable UDV_RULES.
+
 ~~~bash
 $ UDEV_RULES=`cat 70-persistent-net.rules|base64 -w 0`
 ~~~
+
+Next we can cat out the machine configuration file below and it will use the UDEV_RULES variable we set above to enbedded the base64 udev rules.
 
 ~~~bash
 $ cat <<EOF > 99-machine-config-udev-network.yaml
@@ -119,7 +132,7 @@ apiVersion: machineconfiguration.openshift.io/v1
 kind: MachineConfig
 metadata:
    labels:
-     machineconfiguration.openshift.io/role: master
+     machineconfiguration.openshift.io/role: master # Change to worker when using a real multi-node cluster
    name: 99-machine-config-udev-network
 spec:
    config:
@@ -135,10 +148,14 @@ spec:
 EOF
 ~~~
 
+Finally we can create the machine configuration on the cluster.  This will cause nodes to reboot in a rolling fashion and can be monitored with `oc get mcp`.
+
 ~~~bash
 $ oc create -f 99-machine-config-udev-network.yaml
 machineconfig.machineconfiguration.openshift.io/99-machine-config-udev-network created
 ~~~
+
+Once the machine configuration has been successfully applied we can validate that its applied by spot checking nodes in a debug pod to confirm the interface names have been set appropriately.
 
 ~~~bash
 $ oc debug node/nvd-srv-36.nvidia.eng.rdu2.dc.redhat.com
@@ -154,6 +171,10 @@ sh-5.1#
 ~~~
 
 ## Configuring NFD Operator
+
+The Node Feature Discovery (NFD) operator manages the detection of hardware features and configuration in an OpenShift Container Platform cluster by labeling the nodes with hardware-specific information. NFD labels the host with node-specific attributes, such as PCI cards, kernel, operating system version, and so on.
+
+We need to create the NodeFeatureDiscovery instance custom resource file. Note that we add entries to the default deviceClasseWhiteList field, so that to support more network adapters, such as the NVIDIA BlueField DPUs.
 
 ~~~bash
 $ cat <<EOF > nfd-instance.yaml 
@@ -185,10 +206,14 @@ spec:
 EOF
 ~~~
 
+With our instance custom resource file generated we can create it on the cluster.
+
 ~~~bash
 $ oc create -f nfd-instance.yaml
 nodefeaturediscovery.nfd.openshift.io/nfd-instance created
 ~~~
+
+Finally we can validate our instance is up and running by again looking at the pods under the openshift-nfd namespace.
 
 ~~~bash
 $ oc get pods -n openshift-nfd
@@ -200,6 +225,8 @@ nfd-worker-l6jc6                         1/1     Running   7          6d5h
 ~~~
 
 ## Configuring SRIOV Operator
+
+We need to create the default SriovOperatorConfig custom resource file.
 
 ~~~bash
 $ cat <<EOF > sriov-operator-config.yaml 
@@ -215,10 +242,14 @@ spec:
 EOF
 ~~~
 
+Then we need to create it on our cluster.
+
 ~~~bash
 $ oc create -f sriov-operator-config.yaml 
 sriovoperatorconfig.sriovnetwork.openshift.io/default created
 ~~~
+
+Validate that the pods are running.
 
 ~~~bash
 $ oc get pods -n openshift-sriov-network-operator
@@ -229,11 +260,17 @@ sriov-network-config-daemon-ql4cl         1/1     Running   0          49s
 sriov-network-operator-5995bb94f6-qbsgd   1/1     Running   0          18m
 ~~~
 
+Finally patch the sriovoperatorconfig to work with the NVIDIA Network Operator and DOCA/MOFED.
+
 ~~~bash
 oc patch sriovoperatorconfig default --type=merge -n openshift-sriov-network-operator --patch '{ "spec": { "configDaemonNodeSelector": { "network.nvidia.com/operator.mofed.wait": "false", "node-role.kubernetes.io/master": "", "feature.node.kubernetes.io/pci-15b3.sriov.capable": "true" } } }'
 ~~~
 
 ## Configuring NMState Operator
+
+There will be a need to configure network interfaces on the nodes that were not configured at initial cluster creation time and the NMState operator is designed for those use cases. The first step is to create a custom resource file that contains the namespace, operator group and subscription.
+
+A nmstate instance is required so we will create a custom resource file for that.
 
 ~~~bash
 $ cat <<EOF > nmstate-instance.yaml 
@@ -244,10 +281,14 @@ metadata:
 EOF
 ~~~
 
+Then we will create the instance on the cluster.
+
 ~~~bash
 $ oc create -f nmstate-instance.yaml
 nmstate.nmstate.io/nmstate created
 ~~~
+
+Finally we will validate the instance is running.
 
 ~~~bash
 $ oc get pods -n openshift-nmstate
@@ -259,7 +300,11 @@ nmstate-operator-78777d7db8-5frht        1/1     Running   0          21m
 nmstate-webhook-676f7797c4-h4nl6         0/1     Running   0          10s
 ~~~
 
+We will configure NNCP policies at a later point in this document.
+
 ## Configuring NVIDIA Network Operator
+
+With the NVIDIA Network operator up we need to create the NicClusterPolicy custom resource file. Note in this file there are values coded for my environment.  For example the `nic-fw-storage-pvc` is a persistent volume claim I have precreated in my environment using the Local Volume Storage Operator.
 
 ~~~bash
 $ cat <<EOF > ncp-spectrumx.yaml
@@ -327,6 +372,25 @@ spec:
 EOF
 ~~~
 
+Next we can create the NicClusterPolicy custom resource on the cluster.
+
+~~~bash
+$ oc create -f ncp-spectrumx.yaml 
+nicclusterpolicy.mellanox.com/nic-cluster-policy created
+~~~
+
+We can validate the NicClusterPolicy by looking at the running pods.
+
+~~~bash
+$ oc get pods -n nvidia-network-operator
+NAME                                                              READY   STATUS    RESTARTS   AGE
+mofed-rhel9.6-7f8f74fb56-ds-xkjdv                                 2/2     Running   0          6m12s
+nic-configuration-daemon-lkbc8                                    1/1     Running   0          6m11s
+nic-configuration-operator-5cb54c5c89-lhbk7                       1/1     Running   0          6m11s
+nvidia-network-operator-controller-manager-cb54ffcc-k44dz         1/1     Running   0          8m1s
+spectrum-x-flowcontroller-w9wf9                                   1/1     Running   0          6m11s
+~~~
+
 ## Configuring NVIDIA Maintenance Operator
 
 Now we need to configure the `MaintenanceOperatorConfig` custom resource file.  In this file we can specify the log level, the number of parallel operations (ie how many nodes to take offline at once) and the time the node is kept in maintenance (a number in seconds that provides enough time for the maintenance work to happen before the operator will remove the node maintenance policy).  In our example we are just going to allow one maintenance operation at a time and that operation has 300 seconds to finish before the node is returned to schedulable.
@@ -382,7 +446,80 @@ maintenance-operator-controller-manager-995859f88-vq262   1/1     Running   0   
 
 ## Configuring Nic Firmware
 
+NVIDIA NIC Configuration Operator provides Kubernetes API(Custom Resource Definition) to allow FW configuration on Nvidia NICs in a coordinated manner. It deploys, based on settings in the NicClusterPolicy, a configuration daemon on each of the desired nodes to configure Nvidia NICs there. NVIDIA NIC Configuration Operator uses the Maintenance Operator to prepare a node for maintenance before the actual configuration.
+
+We need to define the following NicFirmwareSource file.  This tells the operator where to get the firmware.
+
+~~~bash
+$ cat <<EOF > fwsource.yaml
+apiVersion: configuration.net.nvidia.com/v1alpha1
+kind: NicFirmwareSource
+metadata:
+  name: spc-x-doca-pcc
+  namespace: nvidia-network-operator
+spec:
+  bfbUrlSource: https://content.mellanox.com/BlueField/BFBs/Ubuntu22.04/bf-bundle-3.1.0-76_25.07_ubuntu-22.04_prod.bfb # the newest version I have found, you may skip this for now
+  docaSpcXCCUrlSource: "https://example.com/doca-spcx-cc_3.1.0105-1_amd64.deb" # change when DOCA PCC is available to you
+EOF
+~~~
+
+~~~bash
+$ oc create -f fwsource.yaml 
+nicfirmwaresource.configuration.net.nvidia.com/spc-x-doca-pcc created
+~~~
+
+The NicFirmwareTemplate file will instruct the Nic Configuration Operator on what network cards it should update and with what firmware source defined.
+
+~~~bash
+$ cat <<EOF > fwtemplate.yaml 
+apiVersion: configuration.net.nvidia.com/v1alpha1
+kind: NicFirmwareTemplate
+metadata:
+  name: spectrum-x-configuration
+  namespace: nvidia-network-operator
+spec:
+  nodeSelector:
+    kubernetes.io/hostname: nvd-srv-36.nvidia.eng.rdu2.dc.redhat.com # Drop section if want on all nodes 
+  nicSelector:
+    nicType: "a2dc" # BlueField-3 SuperNIC Type
+    pciAddresses:
+      - "0002:01:00.0" # Drop for all nics to be configured or specifically set for just certain nic
+  template:
+    nicFirmwareSourceRef: spc-x-doca-pcc
+    updatePolicy: Update
+EOF
+~~~
+
+The NicConfigurationTemplate file will instruct the Nic Configuration Operator how to configure the network cards  
+
+~~~bash
+$ cat <<EOF > configtemplate.yaml 
+apiVersion: configuration.net.nvidia.com/v1alpha1
+kind: NicConfigurationTemplate
+metadata:
+  name: spc-x-config
+  namespace: nvidia-network-operator
+spec:
+  nodeSelector:
+    kubernetes.io/hostname: nvd-srv-36.nvidia.eng.rdu2.dc.redhat.com # Drop section if want on all nodes 
+  nicSelector:
+    nicType: "a2dc" # BlueField-3 SuperNIC Type
+    pciAddresses:
+      - "0002:01:00.0" # Drop for all nics to be configured or specifically set for just certain nic
+  resetToDefault: false
+  template:
+    numVfs: 1
+    linkType: Ethernet
+    spectrumXOptimized:
+      enabled: true
+      version: RA2.0
+      overlay: none
+EOF
+~~~
+
 ## Configuring NVIDIA GPU Operator
+
+The NVIDIA GPU Operator is installed but we need to create a GPU cluster policy custom resource file like the one below.
 
 ~~~bash
 $ cat <<EOF > gpu-cluster-policy.yaml 
@@ -491,10 +628,68 @@ spec:
   toolkit:
     installDir: /usr/local/nvidia
     enabled: true
+EOF
 ~~~
 
-~~~bash
+With the GPU ClusterPolicy custom resource generated, let's create it on the cluster on the cluster.
 
+~~~bash
+$ oc create -f gpu-cluster-policy.yaml
+clusterpolicy.nvidia.com/gpu-cluster-policy created
+~~~
+
+Validate the pods are running.
+
+~~~bash
+$ oc get pods -n nvidia-gpu-operator
+NAME                                           READY   STATUS      RESTARTS       AGE
+gpu-feature-discovery-mpqfp                    1/1     Running     0              17h
+gpu-operator-787dc9685f-g9lgj                  1/1     Running     9              2d20h
+nvidia-container-toolkit-daemonset-qvb5c       1/1     Running     0              17h
+nvidia-cuda-validator-7gzsk                    0/1     Completed   0              17h
+nvidia-dcgm-exporter-2w6ff                     1/1     Running     0              17h
+nvidia-dcgm-hclt7                              1/1     Running     0              17h
+nvidia-device-plugin-daemonset-mdkzm           1/1     Running     0              17h
+nvidia-driver-daemonset-9.6.20250925-0-42fxk   4/4     Running     33 (17h ago)   2d19h
+nvidia-mig-manager-s6mtv                       1/1     Running     0              17h
+nvidia-node-status-exporter-n2kkh              1/1     Running     6              2d19h
+nvidia-operator-validator-4b5zx                1/1     Running     0              17h
+~~~
+
+Validate that `nvidia-smi` reponds and kernel modules are loaded.
+
+~~~bash
+$ oc rsh -n nvidia-gpu-operator $(oc -n nvidia-gpu-operator get pod -o name -l app.kubernetes.io/component=nvidia-driver)
+sh-5.1# nvidia-smi
+Fri Oct 31 16:04:06 2025       
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 580.95.05              Driver Version: 580.95.05      CUDA Version: 13.0     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA GH200 480GB             On  |   00000009:01:00.0 Off |                    0 |
+| N/A   24C    P0             85W /  700W |       0MiB /  97871MiB |      0%      Default |
+|                                         |                        |             Disabled |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|  No running processes found                                                             |
++-----------------------------------------------------------------------------------------+
+sh-5.1# lsmod|grep nvidia
+nvidia_fs             303104  0
+nvidia_modeset       1949696  0
+nvidia_uvm           3305472  12
+nvidia              14544896  26 nvidia_uvm,nvidia_fs,gdrdrv,nvidia_modeset
+video                  69632  1 nvidia_modeset
+nvidia_cspmu           40960  0
+arm_cspmu_module       32768  1 nvidia_cspmu
+drm                   684032  5 drm_kms_helper,ast,drm_shmem_helper,nvidia
 ~~~
 
 ## Configuring LLDPD Daemonset
