@@ -19,6 +19,8 @@
 - [Configuring OVS Offload](#configuring-ovs-offload)
 - [Configure Physical Rail Interface Attributes](#configure-physical-rail-interface-attributes)
 - [Configure Bridges and OVS Flows](#configure-bridges-and-ovs-flows)
+- [Configure Spectrum-X CNI](#configure-spectrum-x-CNI)
+- [Validate Spectrum-X Topology](#validate-spectrum-x-topology)
 
 
 ## Environment
@@ -463,9 +465,22 @@ spec:
 EOF
 ~~~
 
+We can then create the resource on the cluster.
+
 ~~~bash
 $ oc create -f fwsource.yaml 
 nicfirmwaresource.configuration.net.nvidia.com/spc-x-doca-pcc created
+~~~
+
+In the logs of the Nic Configuration Operator pod we can confirm the download is working by seeing the following.
+
+~~~bash
+2025-10-31T18:50:42.283077413Z	INFO	firmware/provisioning.go:509	Cache directory is missing metadata file, removing it	{"cacheDir": "/nic-firmware/spc-x-doca-pcc/bfb"}
+2025-10-31T18:50:42.285847653Z	INFO	firmware/provisioning.go:558	Downloading a file	{"cacheDir": "/nic-firmware/spc-x-doca-pcc/bfb", "url": "https://content.mellanox.com/BlueField/BFBs/Ubuntu22.04/bf-bundle-3.1.0-76_25.07_ubuntu-22.04_prod.bfb"}
+2025-10-31T18:50:42.285867557Z	LEVEL(-2)	firmware/utils.go:72	FirmwareUtils.DownloadFile()	{"url": "https://content.mellanox.com/BlueField/BFBs/Ubuntu22.04/bf-bundle-3.1.0-76_25.07_ubuntu-22.04_prod.bfb", "destPath": "/nic-firmware/spc-x-doca-pcc/bfb/bf-bundle-3.1.0-76_25.07_ubuntu-22.04_prod.bfb"}
+2025-10-31T18:51:26.941575957Z	LEVEL(-2)	firmware/provisioning.go:574	File downloaded and validated	{"path": "/nic-firmware/spc-x-doca-pcc/bfb/bf-bundle-3.1.0-76_25.07_ubuntu-22.04_prod.bfb"}
+2025-10-31T18:51:26.941824053Z	INFO	firmware/provisioning.go:275	Writing metadata file to disk	{"cacheDir": "/nic-firmware/spc-x-doca-pcc/bfb", "metadata": {"https://content.mellanox.com/BlueField/BFBs/Ubuntu22.04/bf-bundle-3.1.0-76_25.07_ubuntu-22.04_prod.bfb":"bf-bundle-3.1.0-76_25.07_ubuntu-22.04_prod.bfb"}}
+2025-10-31T18:51:26.943203797Z	INFO	firmware/provisioning.go:587	File successfully processed	{"cacheName": "/nic-firmware/spc-x-doca-pcc/bfb", "url": "https://content.mellanox.com/BlueField/BFBs/Ubuntu22.04/bf-bundle-3.1.0-76_25.07_ubuntu-22.04_prod.bfb", "filename": "bf-bundle-3.1.0-76_25.07_ubuntu-22.04_prod.bfb"}
 ~~~
 
 The NicFirmwareTemplate file will instruct the Nic Configuration Operator on what network cards it should update and with what firmware source defined.
@@ -489,6 +504,15 @@ spec:
     updatePolicy: Update
 EOF
 ~~~
+
+We can then create the resource on the cluster.
+
+~~~bash
+$ oc create -f fwtemplate.yaml
+nicfirmwaretemplate.configuration.net.nvidia.com/spectrum-x-configuration created
+~~~
+
+We can see in the logs 
 
 ~~~bash
 
@@ -1084,3 +1108,11 @@ Oct 08 20:58:34 nvd-srv-30.nvidia.eng.rdu2.dc.redhat.com spectrum-br-flows.sh[35
 Oct 08 20:58:34 nvd-srv-30.nvidia.eng.rdu2.dc.redhat.com spectrum-br-flows.sh[3523]: Adding the flows to the bridge br-enp55s0np0...
 Oct 08 20:58:34 nvd-srv-30.nvidia.eng.rdu2.dc.redhat.com spectrum-br-flows.sh[3523]: Completed setting up all rail bridges and flows!
 ~~~
+
+## Configure Spectrum-X CNI
+
+TBD
+
+## Validate Spectrum-X Topology
+
+TBD
