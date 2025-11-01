@@ -945,44 +945,51 @@ These manual commands can be wrapped into a script where we can programatically 
 ~~~bash
 $ cat <<EOF > spectrum-br-flows.sh
 #!/bin/bash
-echo "Gathering the interfaces..." 
-mapfile -t interfaces < <( ip link | awk -F': ' '/enp55/ && !/br/ {print $2}' )  # replace enp55 with Mellanox when done testing
-
-# Instead of discovering the interfaces above I believe on a true rail system we will always have eth_rail[1-8].   I also believe we need to have some kind of topology awareness.   I believe when we create this service we probably need to point to a topology map file that we would then parse into the array.
-# something like hostname:interface:ipaddress:tor_ipaddress
-# then in the array below we would enumerate through split out the 4 values into variables and then if running on the right host execute the commands.
-
-for i in "${interfaces[@]}"
+echo "Gathering the hostname..." 
+SYSTEM=`hostname`
+while IFS=':' read -r HOSTNAME INTERFACE IPADDRESS SUBNET GATEWAY TORIPADDRESS
 do
-#i="enp55s0np0"
-  echo "Creating bridge for interface $i and settings values..."
-  ovs-vsctl --may-exist add-br br-$i
-  ovs-vsctl set bridge br-$i fail-mode=secure
-  ovs-vsctl set bridge br-$i external-ids:rail_uplink=$i
-  ovs-vsctl set Interface br-$i mtu_request=9216
-  ovs-vsctl add-port br-$i $i
-  ovs-vsctl set Interface $i mtu_request=9216
+  if ["$SYSTEM" == "$HOSTNAME"]
+  then
+    echo "Creating bridge on $SYSTEM for interface $INTERFACE and settings values..."
+    ovs-vsctl --may-exist add-br br-$INTERFACE
+    ovs-vsctl set bridge br-$INTERFACE fail-mode=secure
+    ovs-vsctl set bridge br-$INTERFACE external-ids:rail_uplink=$INTERFACE
+    ovs-vsctl set Interface br-$INTERFACE mtu_request=9216
+    ovs-vsctl add-port br-$INTERFACE $INTERFACE
+    ovs-vsctl set Interface $INTERFACE mtu_request=9216
 
-  echo "Setting ovs-bridge external-ids to tor_ip for br-$1..."
-  #ovs-vsctl set bridge br-$i external-ids:rail_peer_ip={{rail_1_tor_ip}}
+    echo "Setting ovs-bridge external-ids to tor_ip for br-$INTERFACE..."
+    #ovs-vsctl set bridge br-$INTERFACE external-ids:rail_peer_ip=$TORIPADDRESS
+    echo "ovs-vsctl set bridge br-$INTERFACE external-ids:rail_peer_ip=$TORIPADDRESS"
 
-  echo "Adding ip addresses to internal bridge br-$i..."
-  #ip addr add rail_1_host_ip/infra_rail_subnet dev br-$i
-  #ip addr add rail_1_pod_gw_ip dev br-$i
+    echo "Adding ip addresses to internal bridge br-$INTERFACE..."
+    #ip addr add $IPADDRESS/SUBNET dev br-$INTERFACE
+    echo "ip addr add $IPADDRESS/SUBNET dev br-$INTERFACE"
+    #ip addr add $GATEWAY dev br-$INTERFACE    #### <--- Check with NVIDIA this command seems wrong
+    echo "ip addr add $GATEWAY dev br-$INTERFACE" 
 
-  echo "Bringing up br-$i port..."
-  ip link set dev br-$i up
+    echo "Bringing up br-$INTERFACE port..."
+    #ip link set dev br-$INTERFACE up
+    echo "ip link set dev br-$INTERFACE up"
 
-  echo "Adding the flows to the bridge br-$i..."
-  #ovs-ofctl add-flow  br-$i "cookie=0x1, arp,arp_tpa= rail_1_host_ip actions=LOCAL"
-  #ovs-ofctl add-flow  br-$i "cookie=0x1, arp,arp_tpa= rail_1_pod_gw_ip actions=LOCAL"
-  #ovs-ofctl add-flow  br-$i "cookie=0x1, ip,nw_dst= rail_1_host_ip actions=LOCAL"
-  #ovs-ofctl add-flow  br-$i "cookie=0x1, ip,nw_dst= rail_1_pod_gw_ip actions=LOCAL"
-  #ovs-ofctl add-flow  br-$i "cookie=0x1, arp,arp_tpa=rail_1_tor_ip actions=output:$i"
-  #ovs-ofctl add-flow  br-$i "cookie=0x1, ip,in_port=LOCAL,nw_dst=rail_1_tor_ip/8 actions=output:$i"
-done
+    echo "Adding the flows to the bridge br-$INTERFACE..."
+    #ovs-ofctl add-flow  br-$INTERFACE "cookie=0x1, arp,arp_tpa=$IPADDRESS actions=LOCAL"
+    echo "ovs-ofctl add-flow  br-$INTERFACE "cookie=0x1, arp,arp_tpa=$IPADDRESS actions=LOCAL""
+    #ovs-ofctl add-flow  br-$INTERFACE "cookie=0x1, arp,arp_tpa=$GATEWAY actions=LOCAL"
+    echo "ovs-ofctl add-flow  br-$INTERFACE "cookie=0x1, arp,arp_tpa=$GATEWAY actions=LOCAL""
+    #ovs-ofctl add-flow  br-$INTERFACE "cookie=0x1, ip,nw_dst=$IPADDRESS actions=LOCAL"
+    echo "ovs-ofctl add-flow  br-$INTERFACE "cookie=0x1, ip,nw_dst=$IPADDRESS actions=LOCAL""
+    #ovs-ofctl add-flow  br-$INTERFACE "cookie=0x1, ip,nw_dst=$GATEWAY actions=LOCAL"
+    echo "ovs-ofctl add-flow  br-$INTERFACE "cookie=0x1, ip,nw_dst=$GATEWAY actions=LOCAL""
+    #ovs-ofctl add-flow  br-$INTERFACE "cookie=0x1, arp,arp_tpa=$TORIPADDRESS actions=output:$INTERFACE"
+    echo "ovs-ofctl add-flow  br-$INTERFACE "cookie=0x1, arp,arp_tpa=$TORIPADDRESS actions=output:$INTERFACE""
+    #ovs-ofctl add-flow  br-$INTERFACE "cookie=0x1, ip,in_port=LOCAL,nw_dst=$TORIPADDRESS/8 actions=output:$INTERFACE"
+    echo "ovs-ofctl add-flow  br-$INTERFACE "cookie=0x1, ip,in_port=LOCAL,nw_dst=$TORIPADDRESS/8 actions=output:$INTERFACE""
+  fi
+done </etc/spectrum-config-map
 
-echo "Completed setting up all rail bridges and flows!"
+echo "Completed setting up all rail bridges and flows on $SYSTEM!"
 EOF
 ~~~
 
@@ -991,13 +998,15 @@ Now that we have the example script we can base64 encode it and stash it into a 
 ~~~bash
 $ BASE64_SCRIPT=`cat spectrum-br-flows.sh | base64 -w 0`
 $ echo $BASE64_SCRIPT
-IyEvYmluL2Jhc2gKZWNobyAiR2F0aGVyaW5nIHRoZSBpbnRlcmZhY2VzLi4uIiAKbWFwZmlsZSAtdCBpbnRlcmZhY2VzIDwgPCggaXAgbGluayB8IGF3ayAtRic6ICcgJy9lbnA1NS8ge3ByaW50ICQyfScgKSAgIyByZXBsYWNlIGVucDU1IHdpdGggTWVsbGFub3ggd2hlbiBkb25lIHRlc3RpbmcKCmZvciBpIGluICIke2ludGVyZmFjZXNbQF19IgpkbwojaT0iZW5wNTVzMG5wMCIKICBlY2hvICJDcmVhdGluZyBicmlkZ2UgZm9yIGludGVyZmFjZSAkaSBhbmQgc2V0dGluZ3MgdmFsdWVzLi4uIgogIG92cy12c2N0bCAtLW1heS1leGlzdCBhZGQtYnIgYnItJGkKICBvdnMtdnNjdGwgc2V0IGJyaWRnZSBici0kaSBmYWlsLW1vZGU9c2VjdXJlCiAgb3ZzLXZzY3RsIHNldCBicmlkZ2UgYnItJGkgZXh0ZXJuYWwtaWRzOnJhaWxfdXBsaW5rPSRpCiAgb3ZzLXZzY3RsIHNldCBJbnRlcmZhY2UgYnItJGkgbXR1X3JlcXVlc3Q9OTIxNgogIG92cy12c2N0bCBhZGQtcG9ydCBici0kaSAkaQogIG92cy12c2N0bCBzZXQgSW50ZXJmYWNlICRpIG10dV9yZXF1ZXN0PTkyMTYKCiAgZWNobyAiU2V0dGluZyBvdnMtYnJpZGdlIGV4dGVybmFsLWlkcyB0byB0b3JfaXAgZm9yIGJyLSQxLi4uIgogICNvdnMtdnNjdGwgc2V0IGJyaWRnZSBici0kaSBleHRlcm5hbC1pZHM6cmFpbF9wZWVyX2lwPXt7cmFpbF8xX3Rvcl9pcH19CgogIGVjaG8gIkFkZGluZyBpcCBhZGRyZXNzZXMgdG8gaW50ZXJuYWwgYnJpZGdlIGJyLSRpLi4uIgogICNpcCBhZGRyIGFkZCByYWlsXzFfaG9zdF9pcC9pbmZyYV9yYWlsX3N1Ym5ldCBkZXYgYnItJGkKICAjaXAgYWRkciBhZGQgcmFpbF8xX3BvZF9nd19pcCBkZXYgYnItJGkKCiAgZWNobyAiQnJpbmdpbmcgdXAgYnItJGkgcG9ydC4uLiIKICBpcCBsaW5rIHNldCBkZXYgYnItJGkgdXAKCiAgZWNobyAiQWRkaW5nIHRoZSBmbG93cyB0byB0aGUgYnJpZGdlIGJyLSRpLi4uIgogICNvdnMtb2ZjdGwgYWRkLWZsb3cgIGJyLSRpICJjb29raWU9MHgxLCBhcnAsYXJwX3RwYT0gcmFpbF8xX2hvc3RfaXAgYWN0aW9ucz1MT0NBTCIKICAjb3ZzLW9mY3RsIGFkZC1mbG93ICBici0kaSAiY29va2llPTB4MSwgYXJwLGFycF90cGE9IHJhaWxfMV9wb2RfZ3dfaXAgYWN0aW9ucz1MT0NBTCIKICAjb3ZzLW9mY3RsIGFkZC1mbG93ICBici0kaSAiY29va2llPTB4MSwgaXAsbndfZHN0PSByYWlsXzFfaG9zdF9pcCBhY3Rpb25zPUxPQ0FMIgogICNvdnMtb2ZjdGwgYWRkLWZsb3cgIGJyLSRpICJjb29raWU9MHgxLCBpcCxud19kc3Q9IHJhaWxfMV9wb2RfZ3dfaXAgYWN0aW9ucz1MT0NBTCIKICAjb3ZzLW9mY3RsIGFkZC1mbG93ICBici0kaSAiY29va2llPTB4MSwgYXJwLGFycF90cGE9cmFpbF8xX3Rvcl9pcCBhY3Rpb25zPW91dHB1dDokaSIKICAjb3ZzLW9mY3RsIGFkZC1mbG93ICBici0kaSAiY29va2llPTB4MSwgaXAsaW5fcG9ydD1MT0NBTCxud19kc3Q9cmFpbF8xX3Rvcl9pcC84IGFjdGlvbnM9b3V0cHV0OiRpIgpkb25lCgplY2hvICJDb21wbGV0ZWQgc2V0dGluZyB1cCBhbGwgcmFpbCBicmlkZ2VzIGFuZCBmbG93cyEiCg==
+IyEvYmluL2Jhc2gKZWNobyAiR2F0aGVyaW5nIHRoZSBob3N0bmFtZS4uLiIgClNZU1RFTT1gaG9zdG5hbWVgCndoaWxlIElGUz0nOicgcmVhZCAtciBIT1NUTkFNRSBJTlRFUkZBQ0UgSVBBRERSRVNTIFNVQk5FVCBHQVRFV0FZIFRPUklQQUREUkVTUwpkbwogIGlmIFsiJFNZU1RFTSIgPT0gIiRIT1NUTkFNRSJdCiAgdGhlbgogICAgZWNobyAiQ3JlYXRpbmcgYnJpZGdlIG9uICRTWVNURU0gZm9yIGludGVyZmFjZSAkSU5URVJGQUNFIGFuZCBzZXR0aW5ncyB2YWx1ZXMuLi4iCiAgICBvdnMtdnNjdGwgLS1tYXktZXhpc3QgYWRkLWJyIGJyLSRJTlRFUkZBQ0UKICAgIG92cy12c2N0bCBzZXQgYnJpZGdlIGJyLSRJTlRFUkZBQ0UgZmFpbC1tb2RlPXNlY3VyZQogICAgb3ZzLXZzY3RsIHNldCBicmlkZ2UgYnItJElOVEVSRkFDRSBleHRlcm5hbC1pZHM6cmFpbF91cGxpbms9JElOVEVSRkFDRQogICAgb3ZzLXZzY3RsIHNldCBJbnRlcmZhY2UgYnItJElOVEVSRkFDRSBtdHVfcmVxdWVzdD05MjE2CiAgICBvdnMtdnNjdGwgYWRkLXBvcnQgYnItJElOVEVSRkFDRSAkSU5URVJGQUNFCiAgICBvdnMtdnNjdGwgc2V0IEludGVyZmFjZSAkSU5URVJGQUNFIG10dV9yZXF1ZXN0PTkyMTYKCiAgICBlY2hvICJTZXR0aW5nIG92cy1icmlkZ2UgZXh0ZXJuYWwtaWRzIHRvIHRvcl9pcCBmb3IgYnItJElOVEVSRkFDRS4uLiIKICAgICNvdnMtdnNjdGwgc2V0IGJyaWRnZSBici0kSU5URVJGQUNFIGV4dGVybmFsLWlkczpyYWlsX3BlZXJfaXA9JFRPUklQQUREUkVTUwogICAgZWNobyAib3ZzLXZzY3RsIHNldCBicmlkZ2UgYnItJElOVEVSRkFDRSBleHRlcm5hbC1pZHM6cmFpbF9wZWVyX2lwPSRUT1JJUEFERFJFU1MiCgogICAgZWNobyAiQWRkaW5nIGlwIGFkZHJlc3NlcyB0byBpbnRlcm5hbCBicmlkZ2UgYnItJElOVEVSRkFDRS4uLiIKICAgICNpcCBhZGRyIGFkZCAkSVBBRERSRVNTL1NVQk5FVCBkZXYgYnItJElOVEVSRkFDRQogICAgZWNobyAiaXAgYWRkciBhZGQgJElQQUREUkVTUy9TVUJORVQgZGV2IGJyLSRJTlRFUkZBQ0UiCiAgICAjaXAgYWRkciBhZGQgJEdBVEVXQVkgZGV2IGJyLSRJTlRFUkZBQ0UgICAgIyMjIyA8LS0tIENoZWNrIHdpdGggTlZJRElBIHRoaXMgY29tbWFuZCBzZWVtcyB3cm9uZwogICAgZWNobyAiaXAgYWRkciBhZGQgJEdBVEVXQVkgZGV2IGJyLSRJTlRFUkZBQ0UiIAoKICAgIGVjaG8gIkJyaW5naW5nIHVwIGJyLSRJTlRFUkZBQ0UgcG9ydC4uLiIKICAgICNpcCBsaW5rIHNldCBkZXYgYnItJElOVEVSRkFDRSB1cAogICAgZWNobyAiaXAgbGluayBzZXQgZGV2IGJyLSRJTlRFUkZBQ0UgdXAiCgogICAgZWNobyAiQWRkaW5nIHRoZSBmbG93cyB0byB0aGUgYnJpZGdlIGJyLSRJTlRFUkZBQ0UuLi4iCiAgICAjb3ZzLW9mY3RsIGFkZC1mbG93ICBici0kSU5URVJGQUNFICJjb29raWU9MHgxLCBhcnAsYXJwX3RwYT0kSVBBRERSRVNTIGFjdGlvbnM9TE9DQUwiCiAgICBlY2hvICJvdnMtb2ZjdGwgYWRkLWZsb3cgIGJyLSRJTlRFUkZBQ0UgImNvb2tpZT0weDEsIGFycCxhcnBfdHBhPSRJUEFERFJFU1MgYWN0aW9ucz1MT0NBTCIiCiAgICAjb3ZzLW9mY3RsIGFkZC1mbG93ICBici0kSU5URVJGQUNFICJjb29raWU9MHgxLCBhcnAsYXJwX3RwYT0kR0FURVdBWSBhY3Rpb25zPUxPQ0FMIgogICAgZWNobyAib3ZzLW9mY3RsIGFkZC1mbG93ICBici0kSU5URVJGQUNFICJjb29raWU9MHgxLCBhcnAsYXJwX3RwYT0kR0FURVdBWSBhY3Rpb25zPUxPQ0FMIiIKICAgICNvdnMtb2ZjdGwgYWRkLWZsb3cgIGJyLSRJTlRFUkZBQ0UgImNvb2tpZT0weDEsIGlwLG53X2RzdD0kSVBBRERSRVNTIGFjdGlvbnM9TE9DQUwiCiAgICBlY2hvICJvdnMtb2ZjdGwgYWRkLWZsb3cgIGJyLSRJTlRFUkZBQ0UgImNvb2tpZT0weDEsIGlwLG53X2RzdD0kSVBBRERSRVNTIGFjdGlvbnM9TE9DQUwiIgogICAgI292cy1vZmN0bCBhZGQtZmxvdyAgYnItJElOVEVSRkFDRSAiY29va2llPTB4MSwgaXAsbndfZHN0PSRHQVRFV0FZIGFjdGlvbnM9TE9DQUwiCiAgICBlY2hvICJvdnMtb2ZjdGwgYWRkLWZsb3cgIGJyLSRJTlRFUkZBQ0UgImNvb2tpZT0weDEsIGlwLG53X2RzdD0kR0FURVdBWSBhY3Rpb25zPUxPQ0FMIiIKICAgICNvdnMtb2ZjdGwgYWRkLWZsb3cgIGJyLSRJTlRFUkZBQ0UgImNvb2tpZT0weDEsIGFycCxhcnBfdHBhPSRUT1JJUEFERFJFU1MgYWN0aW9ucz1vdXRwdXQ6JElOVEVSRkFDRSIKICAgIGVjaG8gIm92cy1vZmN0bCBhZGQtZmxvdyAgYnItJElOVEVSRkFDRSAiY29va2llPTB4MSwgYXJwLGFycF90cGE9JFRPUklQQUREUkVTUyBhY3Rpb25zPW91dHB1dDokSU5URVJGQUNFIiIKICAgICNvdnMtb2ZjdGwgYWRkLWZsb3cgIGJyLSRJTlRFUkZBQ0UgImNvb2tpZT0weDEsIGlwLGluX3BvcnQ9TE9DQUwsbndfZHN0PSRUT1JJUEFERFJFU1MvOCBhY3Rpb25zPW91dHB1dDokSU5URVJGQUNFIgogICAgZWNobyAib3ZzLW9mY3RsIGFkZC1mbG93ICBici0kSU5URVJGQUNFICJjb29raWU9MHgxLCBpcCxpbl9wb3J0PUxPQ0FMLG53X2RzdD0kVE9SSVBBRERSRVNTLzggYWN0aW9ucz1vdXRwdXQ6JElOVEVSRkFDRSIiCiAgZmkKZG9uZSA8L2V0Yy9zcGVjdHJ1bS1jb25maWctbWFwCgplY2hvICJDb21wbGV0ZWQgc2V0dGluZyB1cCBhbGwgcmFpbCBicmlkZ2VzIGFuZCBmbG93cyBvbiAkU1lTVEVNISIK
 ~~~
 
 Next we need to generate our config mapping.
 
 ~~~bash
-TBD
+$ cat <<EOF >spectrum-config-map 
+nvd-srv-36.nvidia.eng.rdu2.dc.redhat.com:eth_rail0:192.168.67.36:24:192.168.67.1:192.168.67.250
+nvd-srv-36.nvidia.eng.rdu2.dc.redhat.com:eth_rail1:192.168.67.37:24:192.168.67.1:192.168.67.250
 ~~~
 
 We also need to base64 encode our config mapping.
@@ -1005,6 +1014,7 @@ We also need to base64 encode our config mapping.
 ~~~bash
 $ BASE64_MAP=`cat spectrum-config-map | base64 -w 0`
 $ echo $BASE64_MAP
+bnZkLXNydi0zNi5udmlkaWEuZW5nLnJkdTIuZGMucmVkaGF0LmNvbTpldGhfcmFpbDA6MTkyLjE2OC42Ny4zNjoyNDoxOTIuMTY4LjY3LjE6MTkyLjE2OC42Ny4yNTAKbnZkLXNydi0zNi5udmlkaWEuZW5nLnJkdTIuZGMucmVkaGF0LmNvbTpldGhfcmFpbDE6MTkyLjE2OC42Ny4zNzoyNDoxOTIuMTY4LjY3LjE6MTkyLjE2OC42Ny4yNTAK
 ~~~
 
 ~~~bash
