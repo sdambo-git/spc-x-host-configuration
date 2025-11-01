@@ -1017,6 +1017,8 @@ $ echo $BASE64_MAP
 bnZkLXNydi0zNi5udmlkaWEuZW5nLnJkdTIuZGMucmVkaGF0LmNvbTpldGhfcmFpbDA6MTkyLjE2OC42Ny4zNjoyNDoxOTIuMTY4LjY3LjE6MTkyLjE2OC42Ny4yNTAKbnZkLXNydi0zNi5udmlkaWEuZW5nLnJkdTIuZGMucmVkaGF0LmNvbTpldGhfcmFpbDE6MTkyLjE2OC42Ny4zNzoyNDoxOTIuMTY4LjY3LjE6MTkyLjE2OC42Ny4yNTAK
 ~~~
 
+Now we need to take our script and our mapping file and embed the base64 encoding into a machine configuration that will run the script as a systemd service.  Beside initially running the script the systemd service will also restart anytime the openvswitch service is restarted or if the box is rebooted which ensures the flows are always set.
+
 ~~~bash
 $ cat <<EOF >spectrum-br-flows-machineconfig.yaml
 kind: MachineConfig
@@ -1073,9 +1075,11 @@ machineconfig.machineconfiguration.openshift.io/worker-spectrum-br-flow-systemd-
 ~~~bash
 $ oc get mcp
 NAME     CONFIG                                             UPDATED   UPDATING   DEGRADED   MACHINECOUNT   READYMACHINECOUNT   UPDATEDMACHINECOUNT   DEGRADEDMACHINECOUNT   AGE
-master   rendered-master-5e7c05365dad5cb1e5f96a9c14f6cee9   True      False      False      3              3                   3                     0                      21d
-worker   rendered-worker-213acfcc255f377939857a512e933ff0   False     True       False      2              0                   0                     0                      21d
+master   rendered-master-c619e7c9fe8956e4444d2afc6e846411   False     True       False      1              0                   0                     0                      9d
+worker   rendered-worker-54885d6142f5d2cfb949378a4e7e9241   True      False      False      0              0                   0                     0                      9d
 ~~~
+
+Once the `oc mcp` command comes back update we can validate the machine configuration applied appropriately with the following check in a debug pod on the node.
 
 ~~~bash
 $ ssh core@nvd-srv-30.nvidia.eng.rdu2.dc.redhat.com
