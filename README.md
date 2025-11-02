@@ -949,7 +949,7 @@ echo "Gathering the hostname..."
 SYSTEM=`hostname`
 while IFS=':' read -r HOSTNAME INTERFACE IPADDRESS SUBNET GATEWAY TORIPADDRESS
 do
-  if ["$SYSTEM" == "$HOSTNAME"]
+  if [[ "$SYSTEM" == "$HOSTNAME" ]]
   then
     echo "Creating bridge on $SYSTEM for interface $INTERFACE and settings values..."
     ovs-vsctl --may-exist add-br br-$INTERFACE
