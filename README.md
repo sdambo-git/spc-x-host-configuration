@@ -964,8 +964,8 @@ do
     echo "ovs-vsctl set bridge br-$INTERFACE external-ids:rail_peer_ip=$TORIPADDRESS"
 
     echo "Adding ip addresses to internal bridge br-$INTERFACE..."
-    #ip addr add $IPADDRESS/SUBNET dev br-$INTERFACE
-    echo "ip addr add $IPADDRESS/SUBNET dev br-$INTERFACE"
+    #ip addr add $IPADDRESS/$SUBNET dev br-$INTERFACE
+    echo "ip addr add $IPADDRESS/$SUBNET dev br-$INTERFACE"
     #ip addr add $GATEWAY dev br-$INTERFACE    #### <--- Check with NVIDIA this command seems wrong
     echo "ip addr add $GATEWAY dev br-$INTERFACE" 
 
@@ -985,7 +985,7 @@ do
     #ovs-ofctl add-flow  br-$INTERFACE "cookie=0x1, arp,arp_tpa=$TORIPADDRESS actions=output:$INTERFACE"
     echo "ovs-ofctl add-flow  br-$INTERFACE "cookie=0x1, arp,arp_tpa=$TORIPADDRESS actions=output:$INTERFACE""
     #ovs-ofctl add-flow  br-$INTERFACE "cookie=0x1, ip,in_port=LOCAL,nw_dst=$TORIPADDRESS/8 actions=output:$INTERFACE"
-    echo "ovs-ofctl add-flow  br-$INTERFACE "cookie=0x1, ip,in_port=LOCAL,nw_dst=$TORIPADDRESS/8 actions=output:$INTERFACE""
+    echo "ovs-ofctl add-flow  br-$INTERFACE "cookie=0x1, ip,in_port=LOCAL,nw_dst=$TORIPADDRESS/$SUBNET actions=output:$INTERFACE""
   fi
 done </etc/spectrum-config-map
 
@@ -1082,52 +1082,65 @@ worker   rendered-worker-54885d6142f5d2cfb949378a4e7e9241   True      False     
 Once the `oc mcp` command comes back update we can validate the machine configuration applied appropriately with the following check in a debug pod on the node.
 
 ~~~bash
-$ ssh core@nvd-srv-30.nvidia.eng.rdu2.dc.redhat.com
-Red Hat Enterprise Linux CoreOS 9.6.20250826-1
-  Part of OpenShift 4.19, RHCOS is a Kubernetes-native operating system
-  managed by the Machine Config Operator (`clusteroperator/machine-config`).
-
-WARNING: Direct SSH access to machines is not recommended; instead,
-make configuration changes via `machineconfig` objects:
-  https://docs.openshift.com/container-platform/4.19/architecture/architecture-rhcos.html
-
----
-Last login: Wed Oct  8 20:11:37 2025 from 10.22.66.79
-[systemd]
-Failed Units: 1
-  NetworkManager-wait-online.service
-[core@nvd-srv-30 ~]$ sudo bash
-[systemd]
-Failed Units: 1
-  NetworkManager-wait-online.service
-[root@nvd-srv-30 core]# systemctl status spectrum-br-flows.service 
+$ oc debug node/nvd-srv-36.nvidia.eng.rdu2.dc.redhat.com
+Starting pod/nvd-srv-36nvidiaengrdu2dcredhatcom-debug-lwdgf ...
+To use host binaries, run `chroot /host`. Instead, if you need to access host namespaces, run `nsenter -a -t 1`.
+Pod IP: 10.6.135.15
+If you don't see a command prompt, try pressing enter.
+sh-5.1# chroot /host
+sh-5.1# systemctl status spectrum-br-flows.service
 ● spectrum-br-flows.service - Adds the bridges and flows for Spectrum-X whenever openvswitch is started or reloaded
      Loaded: loaded (/etc/systemd/system/spectrum-br-flows.service; enabled; preset: disabled)
-     Active: active (exited) since Wed 2025-10-08 20:58:34 UTC; 2min 25s ago
-   Main PID: 3523 (code=exited, status=0/SUCCESS)
-        CPU: 31ms
+     Active: active (exited) since Sun 2025-11-02 17:24:14 UTC; 10min ago
+   Main PID: 2316 (code=exited, status=0/SUCCESS)
+        CPU: 49ms
 
-Oct 08 20:58:34 nvd-srv-30.nvidia.eng.rdu2.dc.redhat.com ovs-vsctl[3536]: ovs|00001|vsctl|INFO|Called as ovs-vsctl set bridge br-enp55s0np0 external-ids:rail_uplink=enp55s0np0
-Oct 08 20:58:34 nvd-srv-30.nvidia.eng.rdu2.dc.redhat.com ovs-vsctl[3538]: ovs|00001|vsctl|INFO|Called as ovs-vsctl set Interface br-enp55s0np0 mtu_request=9216
-Oct 08 20:58:34 nvd-srv-30.nvidia.eng.rdu2.dc.redhat.com ovs-vsctl[3539]: ovs|00001|vsctl|INFO|Called as ovs-vsctl add-port br-enp55s0np0 enp55s0np0
-Oct 08 20:58:34 nvd-srv-30.nvidia.eng.rdu2.dc.redhat.com ovs-vsctl[3541]: ovs|00001|vsctl|INFO|Called as ovs-vsctl set Interface enp55s0np0 mtu_request=9216
-Oct 08 20:58:34 nvd-srv-30.nvidia.eng.rdu2.dc.redhat.com spectrum-br-flows.sh[3523]: Setting ovs-bridge external-ids to tor_ip for br-...
-Oct 08 20:58:34 nvd-srv-30.nvidia.eng.rdu2.dc.redhat.com spectrum-br-flows.sh[3523]: Adding ip addresses to internal bridge br-enp55s0np0...
-Oct 08 20:58:34 nvd-srv-30.nvidia.eng.rdu2.dc.redhat.com spectrum-br-flows.sh[3523]: Bringing up br-enp55s0np0 port...
-Oct 08 20:58:34 nvd-srv-30.nvidia.eng.rdu2.dc.redhat.com spectrum-br-flows.sh[3523]: Adding the flows to the bridge br-enp55s0np0...
-Oct 08 20:58:34 nvd-srv-30.nvidia.eng.rdu2.dc.redhat.com spectrum-br-flows.sh[3523]: Completed setting up all rail bridges and flows!
-Oct 08 20:58:34 nvd-srv-30.nvidia.eng.rdu2.dc.redhat.com systemd[1]: Finished Adds the bridges and flows for Spectrum-X whenever openvswitch is started or reloaded.
+Nov 02 17:24:14 nvd-srv-36.nvidia.eng.rdu2.dc.redhat.com spectrum-br-flows.sh[2316]: ip link set dev br-eth_rail1 up
+Nov 02 17:24:14 nvd-srv-36.nvidia.eng.rdu2.dc.redhat.com spectrum-br-flows.sh[2316]: Adding the flows to the bridge br-eth_rail1...
+Nov 02 17:24:14 nvd-srv-36.nvidia.eng.rdu2.dc.redhat.com spectrum-br-flows.sh[2316]: ovs-ofctl add-flow  br-eth_rail1 cookie=0x1, arp,arp_tpa=192.168.67.37 actions=LOCAL
+Nov 02 17:24:14 nvd-srv-36.nvidia.eng.rdu2.dc.redhat.com spectrum-br-flows.sh[2316]: ovs-ofctl add-flow  br-eth_rail1 cookie=0x1, arp,arp_tpa=192.168.67.1 actions=LOCAL
+Nov 02 17:24:14 nvd-srv-36.nvidia.eng.rdu2.dc.redhat.com spectrum-br-flows.sh[2316]: ovs-ofctl add-flow  br-eth_rail1 cookie=0x1, ip,nw_dst=192.168.67.37 actions=LOCAL
+Nov 02 17:24:14 nvd-srv-36.nvidia.eng.rdu2.dc.redhat.com spectrum-br-flows.sh[2316]: ovs-ofctl add-flow  br-eth_rail1 cookie=0x1, ip,nw_dst=192.168.67.1 actions=LOCAL
+Nov 02 17:24:14 nvd-srv-36.nvidia.eng.rdu2.dc.redhat.com spectrum-br-flows.sh[2316]: ovs-ofctl add-flow  br-eth_rail1 cookie=0x1, arp,arp_tpa=192.168.67.250 actions=output:eth_rail1
+Nov 02 17:24:14 nvd-srv-36.nvidia.eng.rdu2.dc.redhat.com spectrum-br-flows.sh[2316]: ovs-ofctl add-flow  br-eth_rail1 cookie=0x1, ip,in_port=LOCAL,nw_dst=192.168.67.250/8 actions=output:eth_rail1
+Nov 02 17:24:14 nvd-srv-36.nvidia.eng.rdu2.dc.redhat.com spectrum-br-flows.sh[2316]: Completed setting up all rail bridges and flows on nvd-srv-36.nvidia.eng.rdu2.dc.redhat.com!
+Nov 02 17:24:14 nvd-srv-36.nvidia.eng.rdu2.dc.redhat.com systemd[1]: Finished Adds the bridges and flows for Spectrum-X whenever openvswitch is started or reloaded.
 ~~~
 
 ~~~bash
 [root@nvd-srv-30 core]# journalctl |grep spectrum-br-flows.sh
-Oct 08 20:58:34 nvd-srv-30.nvidia.eng.rdu2.dc.redhat.com spectrum-br-flows.sh[3523]: Gathering the interfaces...
-Oct 08 20:58:34 nvd-srv-30.nvidia.eng.rdu2.dc.redhat.com spectrum-br-flows.sh[3523]: Creating bridge for interface enp55s0np0 and settings values...
-Oct 08 20:58:34 nvd-srv-30.nvidia.eng.rdu2.dc.redhat.com spectrum-br-flows.sh[3523]: Setting ovs-bridge external-ids to tor_ip for br-...
-Oct 08 20:58:34 nvd-srv-30.nvidia.eng.rdu2.dc.redhat.com spectrum-br-flows.sh[3523]: Adding ip addresses to internal bridge br-enp55s0np0...
-Oct 08 20:58:34 nvd-srv-30.nvidia.eng.rdu2.dc.redhat.com spectrum-br-flows.sh[3523]: Bringing up br-enp55s0np0 port...
-Oct 08 20:58:34 nvd-srv-30.nvidia.eng.rdu2.dc.redhat.com spectrum-br-flows.sh[3523]: Adding the flows to the bridge br-enp55s0np0...
-Oct 08 20:58:34 nvd-srv-30.nvidia.eng.rdu2.dc.redhat.com spectrum-br-flows.sh[3523]: Completed setting up all rail bridges and flows!
+Nov 02 17:24:14 nvd-srv-36.nvidia.eng.rdu2.dc.redhat.com spectrum-br-flows.sh[2316]: Gathering the hostname...
+Nov 02 17:24:14 nvd-srv-36.nvidia.eng.rdu2.dc.redhat.com spectrum-br-flows.sh[2316]: Creating bridge on nvd-srv-36.nvidia.eng.rdu2.dc.redhat.com for interface eth_rail0 and settings values...
+Nov 02 17:24:14 nvd-srv-36.nvidia.eng.rdu2.dc.redhat.com spectrum-br-flows.sh[2316]: Setting ovs-bridge external-ids to tor_ip for br-eth_rail0...
+Nov 02 17:24:14 nvd-srv-36.nvidia.eng.rdu2.dc.redhat.com spectrum-br-flows.sh[2316]: ovs-vsctl set bridge br-eth_rail0 external-ids:rail_peer_ip=192.168.67.250
+Nov 02 17:24:14 nvd-srv-36.nvidia.eng.rdu2.dc.redhat.com spectrum-br-flows.sh[2316]: Adding ip addresses to internal bridge br-eth_rail0...
+Nov 02 17:24:14 nvd-srv-36.nvidia.eng.rdu2.dc.redhat.com spectrum-br-flows.sh[2316]: ip addr add 192.168.67.36/24 dev br-eth_rail0
+Nov 02 17:24:14 nvd-srv-36.nvidia.eng.rdu2.dc.redhat.com spectrum-br-flows.sh[2316]: ip addr add 192.168.67.1 dev br-eth_rail0
+Nov 02 17:24:14 nvd-srv-36.nvidia.eng.rdu2.dc.redhat.com spectrum-br-flows.sh[2316]: Bringing up br-eth_rail0 port...
+Nov 02 17:24:14 nvd-srv-36.nvidia.eng.rdu2.dc.redhat.com spectrum-br-flows.sh[2316]: ip link set dev br-eth_rail0 up
+Nov 02 17:24:14 nvd-srv-36.nvidia.eng.rdu2.dc.redhat.com spectrum-br-flows.sh[2316]: Adding the flows to the bridge br-eth_rail0...
+Nov 02 17:24:14 nvd-srv-36.nvidia.eng.rdu2.dc.redhat.com spectrum-br-flows.sh[2316]: ovs-ofctl add-flow  br-eth_rail0 cookie=0x1, arp,arp_tpa=192.168.67.36 actions=LOCAL
+Nov 02 17:24:14 nvd-srv-36.nvidia.eng.rdu2.dc.redhat.com spectrum-br-flows.sh[2316]: ovs-ofctl add-flow  br-eth_rail0 cookie=0x1, arp,arp_tpa=192.168.67.1 actions=LOCAL
+Nov 02 17:24:14 nvd-srv-36.nvidia.eng.rdu2.dc.redhat.com spectrum-br-flows.sh[2316]: ovs-ofctl add-flow  br-eth_rail0 cookie=0x1, ip,nw_dst=192.168.67.36 actions=LOCAL
+Nov 02 17:24:14 nvd-srv-36.nvidia.eng.rdu2.dc.redhat.com spectrum-br-flows.sh[2316]: ovs-ofctl add-flow  br-eth_rail0 cookie=0x1, ip,nw_dst=192.168.67.1 actions=LOCAL
+Nov 02 17:24:14 nvd-srv-36.nvidia.eng.rdu2.dc.redhat.com spectrum-br-flows.sh[2316]: ovs-ofctl add-flow  br-eth_rail0 cookie=0x1, arp,arp_tpa=192.168.67.250 actions=output:eth_rail0
+Nov 02 17:24:14 nvd-srv-36.nvidia.eng.rdu2.dc.redhat.com spectrum-br-flows.sh[2316]: ovs-ofctl add-flow  br-eth_rail0 cookie=0x1, ip,in_port=LOCAL,nw_dst=192.168.67.250/24 actions=output:eth_rail0
+Nov 02 17:24:14 nvd-srv-36.nvidia.eng.rdu2.dc.redhat.com spectrum-br-flows.sh[2316]: Creating bridge on nvd-srv-36.nvidia.eng.rdu2.dc.redhat.com for interface eth_rail1 and settings values...
+Nov 02 17:24:14 nvd-srv-36.nvidia.eng.rdu2.dc.redhat.com spectrum-br-flows.sh[2316]: Setting ovs-bridge external-ids to tor_ip for br-eth_rail1...
+Nov 02 17:24:14 nvd-srv-36.nvidia.eng.rdu2.dc.redhat.com spectrum-br-flows.sh[2316]: ovs-vsctl set bridge br-eth_rail1 external-ids:rail_peer_ip=192.168.67.250
+Nov 02 17:24:14 nvd-srv-36.nvidia.eng.rdu2.dc.redhat.com spectrum-br-flows.sh[2316]: Adding ip addresses to internal bridge br-eth_rail1...
+Nov 02 17:24:14 nvd-srv-36.nvidia.eng.rdu2.dc.redhat.com spectrum-br-flows.sh[2316]: ip addr add 192.168.67.37/24 dev br-eth_rail1
+Nov 02 17:24:14 nvd-srv-36.nvidia.eng.rdu2.dc.redhat.com spectrum-br-flows.sh[2316]: ip addr add 192.168.67.1 dev br-eth_rail1
+Nov 02 17:24:14 nvd-srv-36.nvidia.eng.rdu2.dc.redhat.com spectrum-br-flows.sh[2316]: Bringing up br-eth_rail1 port...
+Nov 02 17:24:14 nvd-srv-36.nvidia.eng.rdu2.dc.redhat.com spectrum-br-flows.sh[2316]: ip link set dev br-eth_rail1 up
+Nov 02 17:24:14 nvd-srv-36.nvidia.eng.rdu2.dc.redhat.com spectrum-br-flows.sh[2316]: Adding the flows to the bridge br-eth_rail1...
+Nov 02 17:24:14 nvd-srv-36.nvidia.eng.rdu2.dc.redhat.com spectrum-br-flows.sh[2316]: ovs-ofctl add-flow  br-eth_rail1 cookie=0x1, arp,arp_tpa=192.168.67.37 actions=LOCAL
+Nov 02 17:24:14 nvd-srv-36.nvidia.eng.rdu2.dc.redhat.com spectrum-br-flows.sh[2316]: ovs-ofctl add-flow  br-eth_rail1 cookie=0x1, arp,arp_tpa=192.168.67.1 actions=LOCAL
+Nov 02 17:24:14 nvd-srv-36.nvidia.eng.rdu2.dc.redhat.com spectrum-br-flows.sh[2316]: ovs-ofctl add-flow  br-eth_rail1 cookie=0x1, ip,nw_dst=192.168.67.37 actions=LOCAL
+Nov 02 17:24:14 nvd-srv-36.nvidia.eng.rdu2.dc.redhat.com spectrum-br-flows.sh[2316]: ovs-ofctl add-flow  br-eth_rail1 cookie=0x1, ip,nw_dst=192.168.67.1 actions=LOCAL
+Nov 02 17:24:14 nvd-srv-36.nvidia.eng.rdu2.dc.redhat.com spectrum-br-flows.sh[2316]: ovs-ofctl add-flow  br-eth_rail1 cookie=0x1, arp,arp_tpa=192.168.67.250 actions=output:eth_rail1
+Nov 02 17:24:14 nvd-srv-36.nvidia.eng.rdu2.dc.redhat.com spectrum-br-flows.sh[2316]: ovs-ofctl add-flow  br-eth_rail1 cookie=0x1, ip,in_port=LOCAL,nw_dst=192.168.67.250/24 actions=output:eth_rail1
+Nov 02 17:24:14 nvd-srv-36.nvidia.eng.rdu2.dc.redhat.com spectrum-br-flows.sh[2316]: Completed setting up all rail bridges and flows on nvd-srv-36.nvidia.eng.rdu2.dc.redhat.com!
 ~~~
 
 ## Configure Spectrum-X CNI
