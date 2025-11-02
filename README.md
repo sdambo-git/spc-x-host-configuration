@@ -984,7 +984,7 @@ do
     echo "ovs-ofctl add-flow  br-$INTERFACE "cookie=0x1, ip,nw_dst=$GATEWAY actions=LOCAL""
     #ovs-ofctl add-flow  br-$INTERFACE "cookie=0x1, arp,arp_tpa=$TORIPADDRESS actions=output:$INTERFACE"
     echo "ovs-ofctl add-flow  br-$INTERFACE "cookie=0x1, arp,arp_tpa=$TORIPADDRESS actions=output:$INTERFACE""
-    #ovs-ofctl add-flow  br-$INTERFACE "cookie=0x1, ip,in_port=LOCAL,nw_dst=$TORIPADDRESS/8 actions=output:$INTERFACE"
+    #ovs-ofctl add-flow  br-$INTERFACE "cookie=0x1, ip,in_port=LOCAL,nw_dst=$TORIPADDRESS/$SUBNET actions=output:$INTERFACE"
     echo "ovs-ofctl add-flow  br-$INTERFACE "cookie=0x1, ip,in_port=LOCAL,nw_dst=$TORIPADDRESS/$SUBNET actions=output:$INTERFACE""
   fi
 done </etc/spectrum-config-map
