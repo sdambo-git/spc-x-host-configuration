@@ -167,7 +167,7 @@ EOF
 ~~~
 
 Finally we can create the machine configuration on the cluster.  This will cause nodes to reboot in a rolling fashion and can be monitored with `oc get mcp`.
-pay carfully attention to the output of `oc get mcp` , sometimes is not working well and the worker node/s remain in degraded  true.
+pay attention to the output of `oc get mcp` , sometimes is not working well and the worker node/s remain in degraded  true.
 
 ~~~bash
 $ oc create -f 99-machine-config-udev-network.yaml
