@@ -159,7 +159,7 @@ spec:
      storage:
        files:
        - contents:
-           source: data:text/plain;base64,$UDEV_RULES
+           source: data:text/plain;charset=utf-8;base64,${UDEV_RULES}
          filesystem: root
          mode: 420
          path: /etc/udev/rules.d/70-persistent-net.rules
