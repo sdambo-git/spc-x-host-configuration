@@ -333,6 +333,9 @@ metadata:
   name: nic-cluster-policy
 spec:
   ofedDriver:
+    env:
+      - name: UNLOAD_STORAGE_MODULES
+        value: "true"
     image: doca-driver
     repository: nvcr.io/nvstaging/mellanox
     version: doca3.2.0-25.10-1.1.2.0-0
