@@ -489,6 +489,57 @@ spec:
 EOF
 ~~~
 
+We can apply it now with
+
+~~~bash
+$ oc apply -f nfs-pv.yaml
+~~~
+
+Now we need to create a pvc to use it
+
+~~~bash
+$ cat <<EOF > cat nfs-pvc.yaml 
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: nginx-nfs-pvc 
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 5Gi
+  volumeName: nginx-nfs-pv
+  storageClassName: ""
+EOF
+~~~
+Now let's apply it
+~~~bash
+oc apply -f nfs-pvc.yaml
+~~~
+
+now we will install NGINX server ( the Nic Configuration Operator can work with http )
+~~~bash
+cat  <<EOF > nginx_configmap.yaml 
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nginx-autoindex
+data:
+  default.conf: |
+    server {
+      listen 80;
+      server_name _;
+
+      location / {
+        root /usr/share/nginx/html;
+        autoindex on;
+        autoindex_exact_size off;
+        autoindex_localtime on;
+      }
+    }
+EOF
+~~~
 ## Configuring Nic Firmware
 
 NVIDIA NIC Configuration Operator provides Kubernetes API(Custom Resource Definition) to allow FW configuration on Nvidia NICs in a coordinated manner. It deploys, based on settings in the NicClusterPolicy, a configuration daemon on each of the desired nodes to configure Nvidia NICs there. NVIDIA NIC Configuration Operator uses the Maintenance Operator to prepare a node for maintenance before the actual configuration.
