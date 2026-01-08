@@ -13,7 +13,7 @@
 - [Configuring NMState Operator](#configuring-nmstate-operator)
 - [Configuring NVIDIA Network Operator](#configuring-nvidia-network-operator)
 - [Configuring NVIDIA Maintenance Operator](#configuring-nvidia-maintenance-operator)
-- [Install HTTP server to serve NIC Firmware files](#Install HTTP server to serve NIC Firmware files)
+- [Install HTTP server to serve NIC Firmware files](https://github.com/schmaustech/spc-x-host-configuration/edit/sdambo/README.md#configuring-nvidia-network-operator)
 - [Configuring Nic Firmware](#configuring-nic-firmware)
 - [Configuring NVIDIA GPU Operator](#configuring-nvidia-network-operator)
 - [Configuring LLDPD Daemonset](#configuring-lldpd-daemonset)
