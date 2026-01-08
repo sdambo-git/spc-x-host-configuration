@@ -465,6 +465,28 @@ $ oc get pods -n nvidia-maintenance-operator
 NAME                                                      READY   STATUS    RESTARTS   AGE
 maintenance-operator-controller-manager-995859f88-vq262   1/1     Running   0          18h
 ~~~
+## Install HTTP server to serve NIC Firmware files
+
+In Order to serve the firmware files, we should Install HTTP server on the local cluster. Firstly by creating NFS pv
+
+~~~bash
+$ cat <<EOF > nfs-pv.yaml 
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: nginx-nfs-pvc
+spec:
+  capacity:
+    storage: 10Gi # Define the storage capacity
+  accessModes:
+    - ReadWriteMany # Allows the volume to be mounted as read-write by many nodes
+  nfs:
+    path: /vm_img/NFS # The exported path on your NFS server
+    server: 10.8.231.39 # The IP address of your NFS server
+  persistentVolumeReclaimPolicy: Retain # Retains the volume after the PVC is deleted
+  volumeMode: Filesystem
+EOF
+~~~
 
 ## Configuring Nic Firmware
 
