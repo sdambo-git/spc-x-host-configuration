@@ -582,7 +582,7 @@ spec:
           name: nginx-autoindex 
 EOF
 ~~~
-No we will deploy it by runnig
+Now we will deploy it by runnig
 ~~~bash
 oc apply -f nginx-deployment.yaml
 ~~~
