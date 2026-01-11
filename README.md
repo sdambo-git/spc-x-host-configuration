@@ -542,13 +542,14 @@ EOF
 ~~~
 
 Lets apply the configmap
+
 ~~~bash
 oc apply -f nginx_configmap.yaml
 ~~~
 
 Nginx Server deployment
 ~~~bash
-$ cat <<EOF > cat nginx-deployment.yaml 
+$ cat <<EOF > nginx-deployment.yaml 
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -582,9 +583,50 @@ spec:
           name: nginx-autoindex 
 EOF
 ~~~
-Now we will deploy it by runnig
+Now we will deploy it by running
+
 ~~~bash
 oc apply -f nginx-deployment.yaml
+~~~
+
+Now, In order for it to be able to serve us, we need to configure service and route
+~~~bash
+$ cat <<EOF > nginx-service.yaml 
+apiVersion: v1
+kind: Service
+metadata:
+  name: nginx-fileserver
+spec:
+  selector:
+    app: nginx-fileserver
+  ports:
+  - name: http
+    port: 80
+    targetPort: 80
+EOF
+~~~
+and apply the service yaml
+~~~bash
+oc apply -f nginx-service.yaml
+~~~
+Lets install the route now
+~~~bash
+$ cat <<EOF > nginx-route.yaml 
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: nginx-fileserver
+spec:
+  to:
+    kind: Service
+    name: nginx-fileserver
+  port:
+    targetPort: http
+EOF
+~~~
+and apply it
+~~~bash
+oc apply -f nginx-route.yaml
 ~~~
 
 ## Configuring Nic Firmware
