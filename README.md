@@ -1200,8 +1200,162 @@ Nov 02 17:24:14 nvd-srv-36.nvidia.eng.rdu2.dc.redhat.com spectrum-br-flows.sh[23
 
 ## Configure Spectrum-X CNI
 
-TBD
+The next thing we need to configure is the Spectrum-X CNI.  This is composed of two components: nv-ipam CIDRPool and an OVSNetwork.   These configuration files will need to be created for each rail interface in the system.   
+
+The nv-ipam CIDRPool looks similar to the following example.  Please adjust the ipaddressing and nodeName information to match the environment and create one for each rail interface.
+
+~~~bash
+apiVersion: nv-ipam.nvidia.com/v1alpha1
+kind: CIDRPool
+metadata:
+  name: rail-1
+  namespace: nvidia-network-operator
+spec:
+  cidr: 192.168.16.0/24
+  gatewayIndex: 0
+  perNodeNetworkPrefix: 31
+  routes:
+  - dst: 192.168.16.0/24
+  - dst: 192.168.16.0/20
+  staticAllocations:
+  - gateway: 192.168.16.31
+    nodeName: dgx-hera-15
+    prefix: 192.168.16.30/31
+  - gateway: 192.168.16.33
+    nodeName: dgx-hera-16
+    prefix: 192.168.16.32/31
+~~~
+
+The OVSNetwork custom resource file looks similar to the following example.   Each rail will require a OVSNetwork configuration.
+
+~~~bash
+apiVersion: sriovnetwork.openshift.io/v1
+kind: OVSNetwork
+metadata:
+  name: rail-1
+  namespace: nvidia-network-operator
+spec:
+  resourceName: rail-1
+  networkNamespace: default
+  mtu: 9216
+  ipam: |
+    {
+      "type": "nv-ipam",
+      "poolName": "rail-1",
+      "poolType": "cidrpool"
+    }
+  metaPlugins: |
+    {
+      "type": "rail"
+    }
+~~~
 
 ## Validate Spectrum-X Topology
 
-TBD
+Once we believe we have all the configurations in place for Spectrum-X on OpenShift and at the Spectrum switch level we should then start with validations.   These validations will include using the rcp-tool validate topology and switch configurations along with an NCCL test run.
+
+To do the topology validation we can run the following rcp-tool command.   
+
+~~~bash
+rcp-tool topology validate
+~~~
+
+To validate the Spectrum switch configuration we can run the following rcp-tool command.
+
+~~~bash
+rcp-tool validation switch-config
+~~~
+
+To validate the OpenShift host side configuration we should run the following rcp-tool command.
+
+~~~bash
+rcp-tool validation host-config
+~~~ 
+
+To initiate ping checks in the topology we can use the following rcp-tool command.
+
+~~~bash
+rcp-tool validation ping
+~~~
+
+If all of the rcp-tool validations check out we can move onto running the final test which is an NCCL test job.   The following custom resource yaml provides an MPI job that can be run from two workers.
+
+Note: This file needs to be checked.
+~~~bash
+apiVersion: kubeflow.org/v2beta1
+kind: MPIJob
+metadata:
+  name: nccl-allreduce-graph-full-scale
+spec:
+  slotsPerWorker: 1
+  runPolicy:
+    cleanPodPolicy: Running
+  mpiReplicaSpecs:
+    Launcher:
+      replicas: 1
+      template:
+          spec:
+            containers:
+            - image: docker.io/deepops/nccl-tests:2312
+              name: nccl-test
+              command: ["/bin/bash", "-c"]
+              args: ["mpirun --allow-run-as-root \
+                    -c 2 \
+                    -bind-to none -map-by slot \
+                    -x NCCL_IB_GID_INDEX=3 \
+                    -x NCCL_IB_TC=96 \
+                    -x NCCL_IB_HCA=mlx5_ \
+                    -x NCCL_IB_ADAPTIVE_ROUTING=1 \
+                    -x NCCL_IB_SPLIT_DATA_ON_QPS=0 \
+                    -x NCCL_IBEXT_DISABLE=0 \
+                    -x UCX_IB_GID_INDEX=3 \
+                    -x UCX_TLS=cuda_copy,rc \
+                    -x UCC_CLS=basic \
+                    -x UCC_TLS=ucp \
+                    -x UCC_TL_NCCL_TUNE=0 \
+                    -x UCC_TL_UCP_TUNE=allgather:@0 \
+                    -x GLOO_SOCKET_IFNAME=eth0
+                    -x HYDRA_FULL_ERROR=1 \
+                    -x NCCL_DEBUG=warn \
+                    -x NCCL_IB_QPS_PER_CONNECTION=2 \
+                    -x NCCL_P2P_NET_CHUNKSIZE=524288 \
+                    -x NCCL_SOCKET_IFNAME=eth0 \
+                    -x NCCL_MIN_NCHANNELS=32 \
+                    -mca btl tcp,self \
+                    -mca btl_tcp_if_include eth0 \
+                    all_reduce_perf_mpi --ngpus 8 \
+                    --minbytes 1k --maxbytes 16G --stepfactor 2 \
+                    --stepbytes 1M --op sum --datatype float --root 0 \
+                    --iters 100 --warmup_iters 50 \
+                     --agg_iters 1 --average 1 --parallel_init 0 --check 1 --blocking 0 --cudagraph 0
+                    "]
+    Worker:
+      replicas: 2
+      template:
+        metadata:
+          annotations:
+            k8s.v1.cni.cncf.io/networks: rail-1,rail-2,rail-3,rail-4,rail-5,rail-6,rail-7,rail-8
+        spec:
+          containers:
+          - image: docker.io/deepops/nccl-tests:2312
+            name: nccltest
+            imagePullPolicy: IfNotPresent
+            securityContext:
+              capabilities:
+                add: ["IPC_LOCK"]
+            resources:
+              requests: &resources
+                nvidia.com/rail-1: "1"
+                nvidia.com/rail-2: "1"
+                nvidia.com/rail-3: "1"
+                nvidia.com/rail-4: "1"
+                nvidia.com/rail-5: "1"
+                nvidia.com/rail-6: "1"
+                nvidia.com/rail-7: "1"
+                nvidia.com/rail-8: "1"
+                nvidia.com/gpu: 8
+              limits:
+                <<: *resources
+~~~
+
+If everything works we should see near line speeds for the data transfer between GPU worker nodes.
