@@ -1169,6 +1169,58 @@ pci/0000:37:00.0: mode switchdev inline-mode none encap-mode basic
 This completes the physical interface confguration section.
 
 ## Configure Bridges and OVS Flows
+The bridges part of configuration could be done using NMState Policy, The following example configures port eth_rail0
+
+~~~bash
+$ cat <<EOF > nmstate_policy.yaml
+apiVersion: nmstate.io/v1
+kind: NodeNetworkConfigurationPolicy
+metadata:
+  name: eth_rail0-policy 
+spec:
+  nodeSelector: 
+    kubernetes.io/hostname: dell-h200-2 
+  desiredState:
+    interfaces:
+    - name: eth_rail0
+      state: up
+      type: ethernet
+      mtu: 9216
+    - name: br1
+      type: ovs-interface
+      mtu: 9216
+      state: up
+      ipv4:
+        enabled: true
+        address:
+          - ip: 192.0.2.2
+            prefix-length: 24
+      routes:
+      config:
+        - destination: 0.0.0.0/0
+          next-hop-address: 192.0.2.254
+          next-hop-interface: eth_rail0
+    - name: br1
+      type: ovs-bridge
+      state: up
+      bridge:
+        options:
+          fail-mode: secure
+          stp: false
+        port:
+        - name: eth_rail0
+        - name: br1
+      ovs-db:
+        external_ids:
+          rail_uplink: eth_rail0
+          rail_peer_ip: <TOR_IP_ADDRESS>
+EOF
+~~~
+Create the NodeNetworkConfigurationPolicy on the cluster
+
+~~~bash
+$ oc create -f nmstate_policy.yaml
+~~~ 
 
 These manual commands can be wrapped into a script where we can programatically create the bridges and flow and recover them when the Openvswitch service restarts or reloads.  The first step is to build a script from the commands.  I envision this script as one that discovers the eth_rail(x) devices on the hosts and then proceeds to create and configure the bridges for each host.  The example script below contains some of that 
 
