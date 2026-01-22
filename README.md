@@ -1338,7 +1338,7 @@ bnZkLXNydi0zNi5udmlkaWEuZW5nLnJkdTIuZGMucmVkaGF0LmNvbTpldGhfcmFpbDA6MTkyLjE2OC42
 Now we need to take our script and our mapping file and embed the base64 encoding into a machine configuration that will run the script as a systemd service.  Beside initially running the script the systemd service will also restart anytime the openvswitch service is restarted or if the box is rebooted which ensures the flows are always set.
 
 ~~~bash
-$ cat <<EOF >spectrum-br-flows-machineconfig.yaml
+$ cat <<EOF >spectrum-flows-machineconfig.yaml
 kind: MachineConfig
 apiVersion: machineconfiguration.openshift.io/v1
 metadata:
@@ -1355,9 +1355,9 @@ spec:
         enabled: true
         contents: |
           [Unit]
-          Description=Adds the bridges and flows for Spectrum-X whenever openvswitch is started or reloaded 
-          PartOf=openvswitch.service
-          After=openvswitch.service
+          Description=Adds the bridges and flows for Spectrum-X after network is online
+          After=NetworkManager-wait-online.service openvswitch.service
+          Wants=NetworkManager-wait-online.service
           [Service]
           RemainAfterExit=yes
           ExecStart=/etc/scripts/spectrum-br-flows.sh
@@ -1374,7 +1374,7 @@ spec:
         mode: 0755
         overwrite: true
       - filesystem: root
-        path: "/etc/scripts/spectrum-config-map"
+        path: "/etc/spectrum-config-map"
         contents:
           source: data:text/plain;charset=utf-8;base64,$BASE64_MAP
           verification: {}
