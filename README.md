@@ -1172,49 +1172,50 @@ This completes the physical interface confguration section.
 The bridges part of configuration could be done using NMState Policy, The following example configures port eth_rail0
 
 ~~~bash
-$ cat <<EOF > nmstate_policy.yaml
+$ cat <<EOF > nmstate_policy_rail0_h200_2.yaml
 apiVersion: nmstate.io/v1
 kind: NodeNetworkConfigurationPolicy
 metadata:
-  name: eth_rail0-policy 
+  name: eth-rail0-policy
 spec:
-  nodeSelector: 
-    kubernetes.io/hostname: dell-h200-2 
+  nodeSelector:
+    kubernetes.io/hostname: dell-h200-2
   desiredState:
     interfaces:
-    - name: eth_rail0
-      state: up
-      type: ethernet
-      mtu: 9216
-    - name: br1
-      type: ovs-interface
-      mtu: 9216
-      state: up
-      ipv4:
-        enabled: true
-        address:
-          - ip: 192.0.2.2
-            prefix-length: 24
-      routes:
+      - name: eth_rail0
+        type: ethernet
+        state: up
+        mtu: 9216
+      - name: br-eth_rail0
+        type: ovs-interface
+        state: up
+        mtu: 9216
+        ipv4:
+          enabled: true
+          address:
+            - ip: 172.31.2.35
+              prefix-length: 31
+      - name: br-eth_rail0
+        type: ovs-bridge
+        state: up
+        bridge:
+          options:
+            fail-mode: secure
+            stp: false
+          port:
+            - name: eth_rail0
+            - name: br-eth_rail0
+        ovs-db:
+          external_ids:
+            rail_uplink: eth_rail0
+            rail_peer_ip: "172.31.2.34"
+    routes:
       config:
-        - destination: 0.0.0.0/0
-          next-hop-address: 192.0.2.254
-          next-hop-interface: eth_rail0
-    - name: br1
-      type: ovs-bridge
-      state: up
-      bridge:
-        options:
-          fail-mode: secure
-          stp: false
-        port:
-        - name: eth_rail0
-        - name: br1
-      ovs-db:
-        external_ids:
-          rail_uplink: eth_rail0
-          rail_peer_ip: <TOR_IP_ADDRESS>
+        - destination: 172.16.0.0/12
+          next-hop-address: 172.31.2.34
+          next-hop-interface: br-eth_rail0
 EOF
+
 ~~~
 Create the NodeNetworkConfigurationPolicy on the cluster
 
