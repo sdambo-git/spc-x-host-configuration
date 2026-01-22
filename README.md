@@ -1220,7 +1220,7 @@ EOF
 Create the NodeNetworkConfigurationPolicy on the cluster
 
 ~~~bash
-$ oc create -f nmstate_policy.yaml
+$ oc create -f nmstate_policy_rail0_h200_2.yaml
 ~~~ 
 
 These manual commands can be wrapped into a script where we can programatically create the bridges and flow and recover them when the Openvswitch service restarts or reloads.  The first step is to build a script from the commands.  I envision this script as one that discovers the eth_rail(x) devices on the hosts and then proceeds to create and configure the bridges for each host.  The example script below contains some of that 
