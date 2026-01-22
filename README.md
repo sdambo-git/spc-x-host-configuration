@@ -1225,7 +1225,7 @@ $ oc create -f nmstate_policy.yaml
 These manual commands can be wrapped into a script where we can programatically create the bridges and flow and recover them when the Openvswitch service restarts or reloads.  The first step is to build a script from the commands.  I envision this script as one that discovers the eth_rail(x) devices on the hosts and then proceeds to create and configure the bridges for each host.  The example script below contains some of that 
 
 ~~~bash
-$ cat <<EOF > spectrum-br-flows.sh
+$ cat <<EOF > spectrum-flows.sh
 #!/bin/bash
 echo "Gathering the hostname..." 
 SYSTEM=`hostname`
@@ -1233,45 +1233,81 @@ while IFS=':' read -r HOSTNAME INTERFACE IPADDRESS SUBNET GATEWAY TORIPADDRESS
 do
   if [[ "$SYSTEM" == "$HOSTNAME" ]]
   then
-    echo "Creating bridge on $SYSTEM for interface $INTERFACE and settings values..."
-    ovs-vsctl --may-exist add-br br-$INTERFACE
-    ovs-vsctl set bridge br-$INTERFACE fail-mode=secure
-    ovs-vsctl set bridge br-$INTERFACE external-ids:rail_uplink=$INTERFACE
-    ovs-vsctl set Interface br-$INTERFACE mtu_request=9216
-    ovs-vsctl add-port br-$INTERFACE $INTERFACE
-    ovs-vsctl set Interface $INTERFACE mtu_request=9216
+    # Bridge creation is handled by nmstate - commented out
+    #echo "Creating bridge on $SYSTEM for interface $INTERFACE and settings values..."
+    #ovs-vsctl --may-exist add-br br-$INTERFACE
+    #ovs-vsctl set bridge br-$INTERFACE fail-mode=secure
+    #ovs-vsctl set bridge br-$INTERFACE external-ids:rail_uplink=$INTERFACE
+    #ovs-vsctl set Interface br-$INTERFACE mtu_request=9216
+    #ovs-vsctl add-port br-$INTERFACE $INTERFACE
+    #ovs-vsctl set Interface $INTERFACE mtu_request=9216
 
-    echo "Setting ovs-bridge external-ids to tor_ip for br-$INTERFACE..."
+    # External-ids handled by nmstate
+    #echo "Setting ovs-bridge external-ids to tor_ip for br-$INTERFACE..."
     #ovs-vsctl set bridge br-$INTERFACE external-ids:rail_peer_ip=$TORIPADDRESS
-    echo "ovs-vsctl set bridge br-$INTERFACE external-ids:rail_peer_ip=$TORIPADDRESS"
+    #echo "ovs-vsctl set bridge br-$INTERFACE external-ids:rail_peer_ip=$TORIPADDRESS"
 
-    echo "Adding ip addresses to internal bridge br-$INTERFACE..."
+    # IP addresses handled by nmstate
+    #echo "Adding ip addresses to internal bridge br-$INTERFACE..."
     #ip addr add $IPADDRESS/$SUBNET dev br-$INTERFACE
-    echo "ip addr add $IPADDRESS/$SUBNET dev br-$INTERFACE"
+    #echo "ip addr add $IPADDRESS/$SUBNET dev br-$INTERFACE"
     #ip addr add $GATEWAY dev br-$INTERFACE    #### <--- Check with NVIDIA this command seems wrong
-    echo "ip addr add $GATEWAY dev br-$INTERFACE" 
+    #echo "ip addr add $GATEWAY dev br-$INTERFACE" 
 
-    echo "Bringing up br-$INTERFACE port..."
+    # Interface state handled by nmstate
+    #echo "Bringing up br-$INTERFACE port..."
     #ip link set dev br-$INTERFACE up
-    echo "ip link set dev br-$INTERFACE up"
+    #echo "ip link set dev br-$INTERFACE up"
 
     echo "Adding the flows to the bridge br-$INTERFACE..."
-    #ovs-ofctl add-flow  br-$INTERFACE "cookie=0x1, arp,arp_tpa=$IPADDRESS actions=LOCAL"
-    echo "ovs-ofctl add-flow  br-$INTERFACE "cookie=0x1, arp,arp_tpa=$IPADDRESS actions=LOCAL""
-    #ovs-ofctl add-flow  br-$INTERFACE "cookie=0x1, arp,arp_tpa=$GATEWAY actions=LOCAL"
-    echo "ovs-ofctl add-flow  br-$INTERFACE "cookie=0x1, arp,arp_tpa=$GATEWAY actions=LOCAL""
-    #ovs-ofctl add-flow  br-$INTERFACE "cookie=0x1, ip,nw_dst=$IPADDRESS actions=LOCAL"
-    echo "ovs-ofctl add-flow  br-$INTERFACE "cookie=0x1, ip,nw_dst=$IPADDRESS actions=LOCAL""
-    #ovs-ofctl add-flow  br-$INTERFACE "cookie=0x1, ip,nw_dst=$GATEWAY actions=LOCAL"
-    echo "ovs-ofctl add-flow  br-$INTERFACE "cookie=0x1, ip,nw_dst=$GATEWAY actions=LOCAL""
-    #ovs-ofctl add-flow  br-$INTERFACE "cookie=0x1, arp,arp_tpa=$TORIPADDRESS actions=output:$INTERFACE"
-    echo "ovs-ofctl add-flow  br-$INTERFACE "cookie=0x1, arp,arp_tpa=$TORIPADDRESS actions=output:$INTERFACE""
-    #ovs-ofctl add-flow  br-$INTERFACE "cookie=0x1, ip,in_port=LOCAL,nw_dst=$TORIPADDRESS/$SUBNET actions=output:$INTERFACE"
-    echo "ovs-ofctl add-flow  br-$INTERFACE "cookie=0x1, ip,in_port=LOCAL,nw_dst=$TORIPADDRESS/$SUBNET actions=output:$INTERFACE""
+    
+    # Wait for bridge to be created by nmstate (up to 120 seconds)
+    MAX_WAIT=120
+    WAIT_COUNT=0
+    echo "Waiting for bridge br-$INTERFACE to be created by nmstate..."
+    while ! ovs-vsctl br-exists br-$INTERFACE; do
+        if [[ $WAIT_COUNT -ge $MAX_WAIT ]]; then
+            echo "ERROR: Bridge br-$INTERFACE does not exist after ${MAX_WAIT}s, skipping..."
+            continue 2
+        fi
+        sleep 5
+        WAIT_COUNT=$((WAIT_COUNT + 5))
+        echo "  Waiting... ($WAIT_COUNT/${MAX_WAIT}s)"
+    done
+    echo "Bridge br-$INTERFACE found!"
+    
+    # Wait for IP to be configured on internal interface (indicates nmstate finished)
+    MAX_WAIT=120
+    WAIT_COUNT=0
+    echo "Waiting for IP $IPADDRESS to be configured on br-$INTERFACE..."
+    while ! ip addr show br-$INTERFACE 2>/dev/null | grep -q "$IPADDRESS"; do
+        if [[ $WAIT_COUNT -ge $MAX_WAIT ]]; then
+            echo "ERROR: IP $IPADDRESS not configured on br-$INTERFACE after ${MAX_WAIT}s, skipping..."
+            continue 2
+        fi
+        sleep 5
+        WAIT_COUNT=$((WAIT_COUNT + 5))
+        echo "  Waiting for IP... ($WAIT_COUNT/${MAX_WAIT}s)"
+    done
+    echo "IP $IPADDRESS is configured on br-$INTERFACE!"
+    
+    
+    # INBOUND: ARP for our IP -> LOCAL
+    ovs-ofctl add-flow br-$INTERFACE "cookie=0x1,priority=100,arp,arp_tpa=$IPADDRESS,actions=LOCAL"
+    echo "ovs-ofctl add-flow br-$INTERFACE \"cookie=0x1,priority=100,arp,arp_tpa=$IPADDRESS,actions=LOCAL\""
+    
+    # INBOUND: IP traffic to our IP -> LOCAL
+    ovs-ofctl add-flow br-$INTERFACE "cookie=0x1,priority=100,ip,nw_dst=$IPADDRESS,actions=LOCAL"
+    echo "ovs-ofctl add-flow br-$INTERFACE \"cookie=0x1,priority=100,ip,nw_dst=$IPADDRESS,actions=LOCAL\""
+    
+    # DEFAULT: All other traffic -> normal L2 switching 
+    ovs-ofctl add-flow br-$INTERFACE "cookie=0x1,priority=0,actions=NORMAL"
+    echo "ovs-ofctl add-flow br-$INTERFACE \"cookie=0x1,priority=0,actions=NORMAL\""
   fi
 done </etc/spectrum-config-map
 
 echo "Completed setting up all rail bridges and flows on $SYSTEM!"
+
 EOF
 ~~~
 
