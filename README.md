@@ -1326,6 +1326,7 @@ Next we need to generate our config mapping.
 $ cat <<EOF >spectrum-config-map 
 nvd-srv-36.nvidia.eng.rdu2.dc.redhat.com:eth_rail0:192.168.67.36:24:192.168.67.1:192.168.67.250
 nvd-srv-36.nvidia.eng.rdu2.dc.redhat.com:eth_rail1:192.168.67.37:24:192.168.67.1:192.168.67.250
+dell-h200-2:eth_rail0:172.31.2.35:31:172.31.2.34:172.31.2.34
 ~~~
 
 We also need to base64 encode our config mapping.
