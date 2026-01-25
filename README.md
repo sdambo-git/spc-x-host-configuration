@@ -1176,7 +1176,7 @@ $ cat <<EOF > nmstate_policy_rail0_h200_2.yaml
 apiVersion: nmstate.io/v1
 kind: NodeNetworkConfigurationPolicy
 metadata:
-  name: eth-rail0-policy
+  name: eth-rail0-h200-2-policy
 spec:
   nodeSelector:
     kubernetes.io/hostname: dell-h200-2
