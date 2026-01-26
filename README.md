@@ -1366,6 +1366,26 @@ spec:
           Type=oneshot
           [Install]
           WantedBy=multi-user.target
+      - name: spectrum-br-flows-watcher.path
+        enabled: true
+        contents: |
+          [Unit]
+          Description=Watch for NetworkManager connection changes to reapply OVS flows
+          [Path]
+          PathChanged=/etc/NetworkManager/system-connections
+          Unit=spectrum-br-flows-watcher.service
+          [Install]
+          WantedBy=multi-user.target
+      - name: spectrum-br-flows-watcher.service
+        enabled: false
+        contents: |
+          [Unit]
+          Description=Reapply OVS flows after NetworkManager connection changes
+          After=NetworkManager.service openvswitch.service
+          [Service]
+          Type=oneshot
+          ExecStartPre=/bin/sleep 5
+          ExecStart=/etc/scripts/spectrum-br-flows.sh
     storage:
       files:
       - filesystem: root
