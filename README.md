@@ -333,10 +333,16 @@ kind: NicClusterPolicy
 metadata:
   name: nic-cluster-policy
 spec:
+  nvIpam:
+    image: nvidia-k8s-ipam
+    repository: nvcr.io/nvstaging/mellanox
+    sourceRepository: nvidia-k8s-ipam
+    version: network-operator-v26.1.0-beta.2
+    nSpectScope: gov-ready
   ofedDriver:
     env:
-      - name: UNLOAD_STORAGE_MODULES
-        value: "true"
+    - name: UNLOAD_STORAGE_MODULES
+      value: "true"
     image: doca-driver
     repository: nvcr.io/nvstaging/mellanox
     version: doca3.2.0-25.10-1.1.2.0-0
@@ -366,10 +372,10 @@ spec:
         - name: nic-configuration-operator
           limits:
             cpu: 1000m
-            memory: 5000Mi
+            memory: 10000Mi
           requests:
             cpu: 1000m
-            memory: 5000Mi
+            memory: 10000Mi
     configurationDaemon:
       image: nic-configuration-operator-daemon
       repository: nvcr.io/nvstaging/mellanox
