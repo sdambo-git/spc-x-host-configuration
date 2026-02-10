@@ -927,7 +927,7 @@ nvidia-operator-validator-4b5zx                1/1     Running     0            
 Validate that `nvidia-smi` reponds and kernel modules are loaded.
 
 ~~~bash
-$ oc rsh -n nvidia-gpu-operator $(oc -n nvidia-gpu-operator get pod -o name -l app.kubernetes.io/component=nvidia-driver)
+$ oc rsh -n nvidia-gpu-operator $(oc -n nvidia-gpu-operator get pod -o name -l app.kubernetes.io/component=nvidia-driver | head -1)
 sh-5.1# nvidia-smi
 Fri Oct 31 16:04:06 2025       
 +-----------------------------------------------------------------------------------------+
