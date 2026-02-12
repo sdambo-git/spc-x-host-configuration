@@ -1239,8 +1239,9 @@ $ cat <<'EOF' > spectrum-flows.sh
 #
 # This script waits for nmstate to create OVS bridges and configure IPs,
 # then adds OpenFlow rules for Spectrum-X traffic.
-# Note: rp_filter is handled by /etc/sysctl.d/99-spectrum-rp-filter.conf
+# Note: rp_filter is also set by /etc/sysctl.d/99-spectrum-rp-filter.conf
 #       and /etc/NetworkManager/dispatcher.d/99-spectrum-rp-filter
+#       but this script sets it again after nmstate finishes to ensure it sticks.
 #
 # Config file format (/etc/spectrum-config-map):
 #   HOSTNAME:INTERFACE:IPADDRESS:SUBNET:GATEWAY:TORIPADDRESS
@@ -1283,6 +1284,12 @@ do
         echo "  Waiting for IP... ($WAIT_COUNT/${MAX_WAIT}s)"
     done
     echo "IP $IPADDRESS is configured on br-$INTERFACE!"
+
+    # Disable reverse path filtering (required for cross-node traffic via ToR)
+    # This must be set after nmstate finishes, as nmstate resets rp_filter
+    echo "Disabling rp_filter on br-$INTERFACE and $INTERFACE..."
+    sysctl -w net.ipv4.conf.br-$INTERFACE.rp_filter=0
+    sysctl -w net.ipv4.conf.$INTERFACE.rp_filter=0
 
     # Add OpenFlow rules
     echo "Adding flows to br-$INTERFACE..."
