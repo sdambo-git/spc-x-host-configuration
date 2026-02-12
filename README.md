@@ -1234,40 +1234,26 @@ These manual commands can be wrapped into a script where we can programatically 
 ~~~bash
 $ cat <<EOF > spectrum-flows.sh
 #!/bin/bash
-echo "Gathering the hostname..." 
+# Spectrum-X OVS bridge flow setup script
+# Deployed via MachineConfig as /etc/scripts/spectrum-br-flows.sh
+#
+# This script waits for nmstate to create OVS bridges and configure IPs,
+# then adds OpenFlow rules for Spectrum-X traffic.
+# Note: rp_filter is handled by /etc/sysctl.d/99-spectrum-rp-filter.conf
+#       and /etc/NetworkManager/dispatcher.d/99-spectrum-rp-filter
+#
+# Config file format (/etc/spectrum-config-map):
+#   HOSTNAME:INTERFACE:IPADDRESS:SUBNET:GATEWAY:TORIPADDRESS
+
+echo "Gathering the hostname..."
 SYSTEM=`hostname`
+
 while IFS=':' read -r HOSTNAME INTERFACE IPADDRESS SUBNET GATEWAY TORIPADDRESS
 do
   if [[ "$SYSTEM" == "$HOSTNAME" ]]
   then
-    # Bridge creation is handled by nmstate - commented out
-    #echo "Creating bridge on $SYSTEM for interface $INTERFACE and settings values..."
-    #ovs-vsctl --may-exist add-br br-$INTERFACE
-    #ovs-vsctl set bridge br-$INTERFACE fail-mode=secure
-    #ovs-vsctl set bridge br-$INTERFACE external-ids:rail_uplink=$INTERFACE
-    #ovs-vsctl set Interface br-$INTERFACE mtu_request=9216
-    #ovs-vsctl add-port br-$INTERFACE $INTERFACE
-    #ovs-vsctl set Interface $INTERFACE mtu_request=9216
+    echo "Processing bridge br-$INTERFACE..."
 
-    # External-ids handled by nmstate
-    #echo "Setting ovs-bridge external-ids to tor_ip for br-$INTERFACE..."
-    #ovs-vsctl set bridge br-$INTERFACE external-ids:rail_peer_ip=$TORIPADDRESS
-    #echo "ovs-vsctl set bridge br-$INTERFACE external-ids:rail_peer_ip=$TORIPADDRESS"
-
-    # IP addresses handled by nmstate
-    #echo "Adding ip addresses to internal bridge br-$INTERFACE..."
-    #ip addr add $IPADDRESS/$SUBNET dev br-$INTERFACE
-    #echo "ip addr add $IPADDRESS/$SUBNET dev br-$INTERFACE"
-    #ip addr add $GATEWAY dev br-$INTERFACE    #### <--- Check with NVIDIA this command seems wrong
-    #echo "ip addr add $GATEWAY dev br-$INTERFACE" 
-
-    # Interface state handled by nmstate
-    #echo "Bringing up br-$INTERFACE port..."
-    #ip link set dev br-$INTERFACE up
-    #echo "ip link set dev br-$INTERFACE up"
-
-    echo "Adding the flows to the bridge br-$INTERFACE..."
-    
     # Wait for bridge to be created by nmstate (up to 120 seconds)
     MAX_WAIT=120
     WAIT_COUNT=0
@@ -1282,7 +1268,7 @@ do
         echo "  Waiting... ($WAIT_COUNT/${MAX_WAIT}s)"
     done
     echo "Bridge br-$INTERFACE found!"
-    
+
     # Wait for IP to be configured on internal interface (indicates nmstate finished)
     MAX_WAIT=120
     WAIT_COUNT=0
@@ -1298,22 +1284,23 @@ do
     done
     echo "IP $IPADDRESS is configured on br-$INTERFACE!"
 
-    # Disable reverse path filtering (required for cross-node traffic via ToR)
-    echo "Disabling rp_filter on br-$INTERFACE and $INTERFACE..."
-    sysctl -w net.ipv4.conf.br-$INTERFACE.rp_filter=0
-    sysctl -w net.ipv4.conf.$INTERFACE.rp_filter=0
+    # Add OpenFlow rules
+    echo "Adding flows to br-$INTERFACE..."
 
     # INBOUND: ARP for our IP -> LOCAL
     ovs-ofctl add-flow br-$INTERFACE "cookie=0x1,priority=100,arp,arp_tpa=$IPADDRESS,actions=LOCAL"
-    echo "ovs-ofctl add-flow br-$INTERFACE \"cookie=0x1,priority=100,arp,arp_tpa=$IPADDRESS,actions=LOCAL\""
-    
+    echo "  Added ARP flow for $IPADDRESS"
+
     # INBOUND: IP traffic to our IP -> LOCAL
     ovs-ofctl add-flow br-$INTERFACE "cookie=0x1,priority=100,ip,nw_dst=$IPADDRESS,actions=LOCAL"
-    echo "ovs-ofctl add-flow br-$INTERFACE \"cookie=0x1,priority=100,ip,nw_dst=$IPADDRESS,actions=LOCAL\""
-    
-    # DEFAULT: All other traffic -> normal L2 switching 
+    echo "  Added IP flow for $IPADDRESS"
+
+    # DEFAULT: All other traffic -> normal L2 switching
     ovs-ofctl add-flow br-$INTERFACE "cookie=0x1,priority=0,actions=NORMAL"
-    echo "ovs-ofctl add-flow br-$INTERFACE \"cookie=0x1,priority=0,actions=NORMAL\""
+    echo "  Added default NORMAL flow"
+
+    echo "Bridge br-$INTERFACE setup complete!"
+    echo ""
   fi
 done </etc/spectrum-config-map
 
