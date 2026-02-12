@@ -1235,7 +1235,7 @@ These manual commands can be wrapped into a script where we can programatically 
 $ cat <<EOF > spectrum-flows.sh
 #!/bin/bash
 echo "Gathering the hostname..." 
-SYSTEM=`hostname`
+SYSTEM=$(hostname)
 while IFS=':' read -r HOSTNAME INTERFACE IPADDRESS SUBNET GATEWAY TORIPADDRESS
 do
   if [[ "$SYSTEM" == "$HOSTNAME" ]]
@@ -1297,8 +1297,12 @@ do
         echo "  Waiting for IP... ($WAIT_COUNT/${MAX_WAIT}s)"
     done
     echo "IP $IPADDRESS is configured on br-$INTERFACE!"
-    
-    
+
+    # Disable reverse path filtering (required for cross-node traffic via ToR)
+    echo "Disabling rp_filter on br-$INTERFACE and $INTERFACE..."
+    sysctl -w net.ipv4.conf.br-$INTERFACE.rp_filter=0
+    sysctl -w net.ipv4.conf.$INTERFACE.rp_filter=0
+
     # INBOUND: ARP for our IP -> LOCAL
     ovs-ofctl add-flow br-$INTERFACE "cookie=0x1,priority=100,arp,arp_tpa=$IPADDRESS,actions=LOCAL"
     echo "ovs-ofctl add-flow br-$INTERFACE \"cookie=0x1,priority=100,arp,arp_tpa=$IPADDRESS,actions=LOCAL\""
