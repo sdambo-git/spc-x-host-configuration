@@ -1235,7 +1235,7 @@ These manual commands can be wrapped into a script where we can programatically 
 $ cat <<EOF > spectrum-flows.sh
 #!/bin/bash
 echo "Gathering the hostname..." 
-SYSTEM=$(hostname)
+SYSTEM=`hostname`
 while IFS=':' read -r HOSTNAME INTERFACE IPADDRESS SUBNET GATEWAY TORIPADDRESS
 do
   if [[ "$SYSTEM" == "$HOSTNAME" ]]
