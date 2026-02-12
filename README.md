@@ -1335,10 +1335,51 @@ $ echo $BASE64_MAP
 bnZkLXNydi0zNi5udmlkaWEuZW5nLnJkdTIuZGMucmVkaGF0LmNvbTpldGhfcmFpbDA6MTkyLjE2OC42Ny4zNjoyNDoxOTIuMTY4LjY3LjE6MTkyLjE2OC42Ny4yNTAKbnZkLXNydi0zNi5udmlkaWEuZW5nLnJkdTIuZGMucmVkaGF0LmNvbTpldGhfcmFpbDE6MTkyLjE2OC42Ny4zNzoyNDoxOTIuMTY4LjY3LjE6MTkyLjE2OC42Ny4yNTAK
 ~~~
 
+We need now to create a NetworkManager Dispacher to set the kernel rp_filter to 0 ( without it when we add a node , we won't be able to ping or reply to ping )
+
+~~~bash
+$ cat <<'EOF' >spectrum-rp-filter-dispatcher.sh
+#!/bin/bash
+# NetworkManager dispatcher script to disable rp_filter on Spectrum-X interfaces
+# Triggered whenever an interface goes up/down
+IFACE="$1"
+ACTION="$2"
+
+if [[ "$ACTION" == "up" ]]; then
+    # Check if this is a Spectrum-X bridge or physical rail interface
+    case "$IFACE" in
+        br-eth_rail*|eth_rail*)
+            logger -t spectrum-rp-filter "Setting rp_filter=0 on $IFACE (triggered by NM dispatcher)"
+            sysctl -w net.ipv4.conf.${IFACE}.rp_filter=0 2>/dev/null
+            # Also set the counterpart (bridge<->physical)
+            if [[ "$IFACE" == br-* ]]; then
+                PHYS="${IFACE#br-}"
+                sysctl -w net.ipv4.conf.${PHYS}.rp_filter=0 2>/dev/null
+            else
+                sysctl -w net.ipv4.conf.br-${IFACE}.rp_filter=0 2>/dev/null
+            fi
+            ;;
+    esac
+fi
+EOF
+~~~
+
+Now lets change the permissions on the dispacher script.
+
+~~~bash
+$ chmod +x spectrum-rp-filter-dispatcher.sh
+~~~
+
+We also need to base64 encode our dispacher script.
+
+~~~bash
+BASE64_DISPATCHER=$(base64 -w0 spectrum-rp-filter-dispatcher.sh)
+~~~
+
 Now we need to take our script and our mapping file and embed the base64 encoding into a machine configuration that will run the script as a systemd service.  Beside initially running the script the systemd service will also restart anytime the openvswitch service is restarted or if the box is rebooted which ensures the flows are always set.
 
 ~~~bash
-$ cat <<EOF > spectrum-flows-machineconfig.yaml
+$ cat > spectrum-flows-machineconfig.yaml << EOF
 kind: MachineConfig
 apiVersion: machineconfiguration.openshift.io/v1
 metadata:
@@ -1397,6 +1438,20 @@ spec:
         path: "/etc/spectrum-config-map"
         contents:
           source: data:text/plain;charset=utf-8;base64,$BASE64_MAP
+          verification: {}
+        mode: 0644
+        overwrite: true
+      - filesystem: root
+        path: "/etc/NetworkManager/dispatcher.d/99-spectrum-rp-filter"
+        contents:
+          source: data:text/plain;charset=utf-8;base64,$BASE64_DISPATCHER
+          verification: {}
+        mode: 0755
+        overwrite: true
+      - filesystem: root
+        path: "/etc/sysctl.d/99-spectrum-rp-filter.conf"
+        contents:
+          source: data:text/plain;charset=utf-8;base64,$(echo -e "# Disable rp_filter for Spectrum-X cross-node traffic\nnet.ipv4.conf.default.rp_filter=0\nnet.ipv4.conf.all.rp_filter=0" | base64 -w0)
           verification: {}
         mode: 0644
         overwrite: true
