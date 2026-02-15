@@ -1285,12 +1285,6 @@ do
     done
     echo "IP $IPADDRESS is configured on br-$INTERFACE!"
 
-    # Disable reverse path filtering (required for cross-node traffic via ToR)
-    # This must be set after nmstate finishes, as nmstate resets rp_filter
-    echo "Disabling rp_filter on br-$INTERFACE and $INTERFACE..."
-    sysctl -w net.ipv4.conf.br-$INTERFACE.rp_filter=0
-    sysctl -w net.ipv4.conf.$INTERFACE.rp_filter=0
-
     # Add OpenFlow rules
     echo "Adding flows to br-$INTERFACE..."
 
@@ -1308,6 +1302,23 @@ do
 
     echo "Bridge br-$INTERFACE setup complete!"
     echo ""
+  fi
+done </etc/spectrum-config-map
+
+# Wait for nmstate to finish all reconciliation before setting rp_filter
+# nmstate can reset rp_filter after interfaces are configured
+echo "Waiting 30s for nmstate to finish reconciliation..."
+sleep 30
+
+# Disable reverse path filtering on all rail interfaces
+# Required for cross-node traffic routed via ToR switch
+echo "Disabling rp_filter on all rail interfaces..."
+while IFS=':' read -r HOSTNAME INTERFACE IPADDRESS SUBNET GATEWAY TORIPADDRESS
+do
+  if [[ "$SYSTEM" == "$HOSTNAME" ]]
+  then
+    sysctl -w net.ipv4.conf.br-$INTERFACE.rp_filter=0
+    sysctl -w net.ipv4.conf.$INTERFACE.rp_filter=0
   fi
 done </etc/spectrum-config-map
 
