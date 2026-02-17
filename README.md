@@ -1322,9 +1322,12 @@ do
   fi
 done </etc/spectrum-config-map
 
+# Enable IP forwarding for L3 routing between TOR-host and host-pod subnets
+echo "Enabling IP forwarding..."
+sysctl -w net.ipv4.ip_forward=1
+
 echo "Completed setting up all rail bridges and flows on $SYSTEM!"
 
-EOF
 ~~~
 
 Now that we have the example script we can base64 encode it and stash it into a variable.
