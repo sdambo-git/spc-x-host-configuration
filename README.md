@@ -1232,42 +1232,29 @@ $ oc create -f nmstate_policy_rail0_h200_2.yaml
 These manual commands can be wrapped into a script where we can programatically create the bridges and flow and recover them when the Openvswitch service restarts or reloads.  The first step is to build a script from the commands.  I envision this script as one that discovers the eth_rail(x) devices on the hosts and then proceeds to create and configure the bridges for each host.  The example script below contains some of that 
 
 ~~~bash
-$ cat <<EOF > spectrum-flows.sh
+$ cat <<'EOF' > spectrum-flows.sh
 #!/bin/bash
-echo "Gathering the hostname..." 
+# Spectrum-X OVS bridge flow setup script
+# Deployed via MachineConfig as /etc/scripts/spectrum-br-flows.sh
+#
+# This script waits for nmstate to create OVS bridges and configure IPs,
+# then adds OpenFlow rules for Spectrum-X traffic.
+# Note: rp_filter is also set by /etc/sysctl.d/99-spectrum-rp-filter.conf
+#       and /etc/NetworkManager/dispatcher.d/99-spectrum-rp-filter
+#       but this script sets it again after nmstate finishes to ensure it sticks.
+#
+# Config file format (/etc/spectrum-config-map):
+#   HOSTNAME:INTERFACE:IPADDRESS:SUBNET:GATEWAY:TORIPADDRESS
+
+echo "Gathering the hostname..."
 SYSTEM=`hostname`
+
 while IFS=':' read -r HOSTNAME INTERFACE IPADDRESS SUBNET GATEWAY TORIPADDRESS
 do
   if [[ "$SYSTEM" == "$HOSTNAME" ]]
   then
-    # Bridge creation is handled by nmstate - commented out
-    #echo "Creating bridge on $SYSTEM for interface $INTERFACE and settings values..."
-    #ovs-vsctl --may-exist add-br br-$INTERFACE
-    #ovs-vsctl set bridge br-$INTERFACE fail-mode=secure
-    #ovs-vsctl set bridge br-$INTERFACE external-ids:rail_uplink=$INTERFACE
-    #ovs-vsctl set Interface br-$INTERFACE mtu_request=9216
-    #ovs-vsctl add-port br-$INTERFACE $INTERFACE
-    #ovs-vsctl set Interface $INTERFACE mtu_request=9216
+    echo "Processing bridge br-$INTERFACE..."
 
-    # External-ids handled by nmstate
-    #echo "Setting ovs-bridge external-ids to tor_ip for br-$INTERFACE..."
-    #ovs-vsctl set bridge br-$INTERFACE external-ids:rail_peer_ip=$TORIPADDRESS
-    #echo "ovs-vsctl set bridge br-$INTERFACE external-ids:rail_peer_ip=$TORIPADDRESS"
-
-    # IP addresses handled by nmstate
-    #echo "Adding ip addresses to internal bridge br-$INTERFACE..."
-    #ip addr add $IPADDRESS/$SUBNET dev br-$INTERFACE
-    #echo "ip addr add $IPADDRESS/$SUBNET dev br-$INTERFACE"
-    #ip addr add $GATEWAY dev br-$INTERFACE    #### <--- Check with NVIDIA this command seems wrong
-    #echo "ip addr add $GATEWAY dev br-$INTERFACE" 
-
-    # Interface state handled by nmstate
-    #echo "Bringing up br-$INTERFACE port..."
-    #ip link set dev br-$INTERFACE up
-    #echo "ip link set dev br-$INTERFACE up"
-
-    echo "Adding the flows to the bridge br-$INTERFACE..."
-    
     # Wait for bridge to be created by nmstate (up to 120 seconds)
     MAX_WAIT=120
     WAIT_COUNT=0
@@ -1282,7 +1269,7 @@ do
         echo "  Waiting... ($WAIT_COUNT/${MAX_WAIT}s)"
     done
     echo "Bridge br-$INTERFACE found!"
-    
+
     # Wait for IP to be configured on internal interface (indicates nmstate finished)
     MAX_WAIT=120
     WAIT_COUNT=0
@@ -1297,25 +1284,50 @@ do
         echo "  Waiting for IP... ($WAIT_COUNT/${MAX_WAIT}s)"
     done
     echo "IP $IPADDRESS is configured on br-$INTERFACE!"
-    
-    
+
+    # Add OpenFlow rules
+    echo "Adding flows to br-$INTERFACE..."
+
     # INBOUND: ARP for our IP -> LOCAL
     ovs-ofctl add-flow br-$INTERFACE "cookie=0x1,priority=100,arp,arp_tpa=$IPADDRESS,actions=LOCAL"
-    echo "ovs-ofctl add-flow br-$INTERFACE \"cookie=0x1,priority=100,arp,arp_tpa=$IPADDRESS,actions=LOCAL\""
-    
+    echo "  Added ARP flow for $IPADDRESS"
+
     # INBOUND: IP traffic to our IP -> LOCAL
     ovs-ofctl add-flow br-$INTERFACE "cookie=0x1,priority=100,ip,nw_dst=$IPADDRESS,actions=LOCAL"
-    echo "ovs-ofctl add-flow br-$INTERFACE \"cookie=0x1,priority=100,ip,nw_dst=$IPADDRESS,actions=LOCAL\""
-    
-    # DEFAULT: All other traffic -> normal L2 switching 
+    echo "  Added IP flow for $IPADDRESS"
+
+    # DEFAULT: All other traffic -> normal L2 switching
     ovs-ofctl add-flow br-$INTERFACE "cookie=0x1,priority=0,actions=NORMAL"
-    echo "ovs-ofctl add-flow br-$INTERFACE \"cookie=0x1,priority=0,actions=NORMAL\""
+    echo "  Added default NORMAL flow"
+
+    echo "Bridge br-$INTERFACE setup complete!"
+    echo ""
   fi
 done </etc/spectrum-config-map
 
+# Wait for nmstate to finish all reconciliation before setting rp_filter
+# nmstate can reset rp_filter after interfaces are configured
+echo "Waiting 30s for nmstate to finish reconciliation..."
+sleep 30
+
+# Disable reverse path filtering on all rail interfaces
+# Required for cross-node traffic routed via ToR switch
+echo "Disabling rp_filter on all rail interfaces..."
+while IFS=':' read -r HOSTNAME INTERFACE IPADDRESS SUBNET GATEWAY TORIPADDRESS
+do
+  if [[ "$SYSTEM" == "$HOSTNAME" ]]
+  then
+    sysctl -w net.ipv4.conf.br-$INTERFACE.rp_filter=0
+    sysctl -w net.ipv4.conf.$INTERFACE.rp_filter=0
+  fi
+done </etc/spectrum-config-map
+
+# Enable IP forwarding for L3 routing between TOR-host and host-pod subnets
+echo "Enabling IP forwarding..."
+sysctl -w net.ipv4.ip_forward=1
+
 echo "Completed setting up all rail bridges and flows on $SYSTEM!"
 
-EOF
 ~~~
 
 Now that we have the example script we can base64 encode it and stash it into a variable.
@@ -1344,10 +1356,53 @@ $ echo $BASE64_MAP
 bnZkLXNydi0zNi5udmlkaWEuZW5nLnJkdTIuZGMucmVkaGF0LmNvbTpldGhfcmFpbDA6MTkyLjE2OC42Ny4zNjoyNDoxOTIuMTY4LjY3LjE6MTkyLjE2OC42Ny4yNTAKbnZkLXNydi0zNi5udmlkaWEuZW5nLnJkdTIuZGMucmVkaGF0LmNvbTpldGhfcmFpbDE6MTkyLjE2OC42Ny4zNzoyNDoxOTIuMTY4LjY3LjE6MTkyLjE2OC42Ny4yNTAK
 ~~~
 
+We need now to create a NetworkManager Dispacher to set the kernel rp_filter to 0 ( without it when we add a node , we won't be able to ping or reply to ping )
+
+~~~bash
+$ cat <<'EOF' >spectrum-rp-filter-dispatcher.sh
+#!/bin/bash
+# NetworkManager dispatcher script to disable rp_filter on Spectrum-X interfaces
+# Triggered whenever an interface goes up/down
+IFACE="$1"
+ACTION="$2"
+
+if [[ "$ACTION" == "up" ]]; then
+    # Check if this is a Spectrum-X bridge or physical rail interface
+    case "$IFACE" in
+        br-eth_rail*|eth_rail*)
+            logger -t spectrum-rp-filter "Setting rp_filter=0 on $IFACE (triggered by NM dispatcher)"
+            sysctl -w net.ipv4.conf.${IFACE}.rp_filter=0 2>/dev/null
+            # Also set the counterpart (bridge<->physical)
+            if [[ "$IFACE" == br-* ]]; then
+                PHYS="${IFACE#br-}"
+                sysctl -w net.ipv4.conf.${PHYS}.rp_filter=0 2>/dev/null
+            else
+                sysctl -w net.ipv4.conf.br-${IFACE}.rp_filter=0 2>/dev/null
+            fi
+            ;;
+    esac
+fi
+EOF
+~~~
+
+Now lets change the permissions on the dispacher script.
+
+~~~bash
+$ chmod +x spectrum-rp-filter-dispatcher.sh
+~~~
+
+We also need to base64 encode our dispacher script.
+
+~~~bash
+$ BASE64_DISPATCHER=$(base64 -w0 spectrum-rp-filter-dispatcher.sh)
+$ echo $BASE64_DISPATCHER 
+IyEvYmluL2Jhc2gKIyBOZXR3b3JrTWFuYWdlciBkaXNwYXRjaGVyIHNjcmlwdCB0byBkaXNhYmxlIHJwX2ZpbHRlciBvbiBTcGVjdHJ1bS1YIGludGVyZmFjZXMKIyBUcmlnZ2VyZWQgd2hlbmV2ZXIgYW4gaW50ZXJmYWNlIGdvZXMgdXAvZG93bgpJRkFDRT0iJDEiCkFDVElPTj0iJDIiCgppZiBbWyAiJEFDVElPTiIgPT0gInVwIiBdXTsgdGhlbgogICAgIyBDaGVjayBpZiB0aGlzIGlzIGEgU3BlY3RydW0tWCBicmlkZ2Ugb3IgcGh5c2ljYWwgcmFpbCBpbnRlcmZhY2UKICAgIGNhc2UgIiRJRkFDRSIgaW4KICAgICAgICBici1ldGhfcmFpbCp8ZXRoX3JhaWwqKQogICAgICAgICAgICBsb2dnZXIgLXQgc3BlY3RydW0tcnAtZmlsdGVyICJTZXR0aW5nIHJwX2ZpbHRlcj0wIG9uICRJRkFDRSAodHJpZ2dlcmVkIGJ5IE5NIGRpc3BhdGNoZXIpIgogICAgICAgICAgICBzeXNjdGwgLXcgbmV0LmlwdjQuY29uZi4ke0lGQUNFfS5ycF9maWx0ZXI9MCAyPi9kZXYvbnVsbAogICAgICAgICAgICAjIEFsc28gc2V0IHRoZSBjb3VudGVycGFydCAoYnJpZGdlPC0+cGh5c2ljYWwpCiAgICAgICAgICAgIGlmIFtbICIkSUZBQ0UiID09IGJyLSogXV07IHRoZW4KICAgICAgICAgICAgICAgIFBIWVM9IiR7SUZBQ0UjYnItfSIKICAgICAgICAgICAgICAgIHN5c2N0bCAtdyBuZXQuaXB2NC5jb25mLiR7UEhZU30ucnBfZmlsdGVyPTAgMj4vZGV2L251bGwKICAgICAgICAgICAgZWxzZQogICAgICAgICAgICAgICAgc3lzY3RsIC13IG5ldC5pcHY0LmNvbmYuYnItJHtJRkFDRX0ucnBfZmlsdGVyPTAgMj4vZGV2L251bGwKICAgICAgICAgICAgZmkKICAgICAgICAgICAgOzsKICAgIGVzYWMKZmkK
+~~~
+
 Now we need to take our script and our mapping file and embed the base64 encoding into a machine configuration that will run the script as a systemd service.  Beside initially running the script the systemd service will also restart anytime the openvswitch service is restarted or if the box is rebooted which ensures the flows are always set.
 
 ~~~bash
-$ cat <<EOF > spectrum-flows-machineconfig.yaml
+$ cat > spectrum-flows-machineconfig.yaml << EOF
 kind: MachineConfig
 apiVersion: machineconfiguration.openshift.io/v1
 metadata:
@@ -1406,6 +1461,20 @@ spec:
         path: "/etc/spectrum-config-map"
         contents:
           source: data:text/plain;charset=utf-8;base64,$BASE64_MAP
+          verification: {}
+        mode: 0644
+        overwrite: true
+      - filesystem: root
+        path: "/etc/NetworkManager/dispatcher.d/99-spectrum-rp-filter"
+        contents:
+          source: data:text/plain;charset=utf-8;base64,$BASE64_DISPATCHER
+          verification: {}
+        mode: 0755
+        overwrite: true
+      - filesystem: root
+        path: "/etc/sysctl.d/99-spectrum-rp-filter.conf"
+        contents:
+          source: data:text/plain;charset=utf-8;base64,$(echo -e "# Disable rp_filter for Spectrum-X cross-node traffic\nnet.ipv4.conf.default.rp_filter=0\nnet.ipv4.conf.all.rp_filter=0" | base64 -w0)
           verification: {}
         mode: 0644
         overwrite: true
