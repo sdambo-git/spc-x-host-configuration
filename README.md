@@ -107,6 +107,43 @@ machineconfig.machineconfiguration.openshift.io/99-master-nvd-srv-36 created
 
 To validate this has been configured we can use `dmesg` output and `oc describe node` to see iommu and hughpages are set.
 
+## Set RDMA Subsystem Namespace Awareness
+
+enable RDMA device namespace separation, which is essential for proper resource isolation in containerized environments.
+
+~~~bash
+IB_CORE=$(echo "options ib_core netns_mode=0" | base64 -w 0)
+~~~
+
+~~~bash
+cat <<EOF > 99-worker-ib-core-netns.yaml
+apiVersion: machineconfiguration.openshift.io/v1
+kind: MachineConfig
+metadata:
+  labels:
+    machineconfiguration.openshift.io/role: worker
+  name: 99-worker-ib-core-netns
+spec:
+  config:
+    ignition:
+      version: 3.2.0
+    storage:
+      files:
+      - contents:
+          source: data:text/plain;base64,${IB_CORE}
+        mode: 420
+        overwrite: true
+        path: /etc/modprobe.d/ib_core.conf
+EOF
+~~~
+
+Create the machine configuration on the cluster.  This will cause nodes to reboot in a rolling fashion and can be monitored with `oc get mcp`.
+
+~~~bash
+oc create -f 99-worker-ib-core-netns.yaml 
+machineconfig.machineconfiguration.openshift.io/99-worker-ib-core-netns created
+~~~
+
 ## Set UDEV Rules for Rail Device Names
 
 We need to use udev rules to normalize the interface names on each node to eth_rail or roce_rail for ethernet and infiniband respectively.   We can do this by creating a persistent udev rules file indicating the devices which should be the same across all worker nodes in a homogenous cluster.   Below is an example of what that file might look like.  On the GH200 node we only have two interfaces to work with but it gives you an idea.
