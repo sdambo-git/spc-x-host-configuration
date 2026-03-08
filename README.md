@@ -6,7 +6,7 @@
 
 - [Environment](#environment)
 - [Set Core User Password for Troubleshooting](#set-core-user-password-for-troubleshooting)
-- [Set Hugepages and IOMMU Off](#set-hugepages-and-iommu-off)
+- [Set Hugepages and IOMMU](#set-hugepages-and-iommu)
 - [Set UDEV Rules for Rail Device Names](#set-udev-rules-for-rail-device-names)
 - [Configuring NFD Operator](#configuring-nfd-operator)
 - [Configuring SRIOV Operator](#configuring-sriov-operator)
@@ -77,7 +77,7 @@ worker   rendered-worker-d853a15275615906b9d23f4a28e007f4   True      False     
 
 Before completing this section make sure to test that it is possible to login as the core user on the BMC console as the password that was set.
 
-## Set Hugepages and IOMMU Off
+## Set Hugepages and IOMMU
 
 We need to set hughpages and disable iommu.  This can be achieved with the following machine configuration.
 
