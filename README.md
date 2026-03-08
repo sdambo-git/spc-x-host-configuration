@@ -78,9 +78,9 @@ worker   rendered-worker-d853a15275615906b9d23f4a28e007f4   True      False     
 
 Before completing this section make sure to test that it is possible to login as the core user on the BMC console as the password that was set.
 
-## Set Hugepages and IOMMU Off
+## Set Hugepages and IOMMU 
 
-We need to set hughpages and disable iommu.  This can be achieved with the following machine configuration.
+We need to set hughpages and iommu.  This can be achieved with the following machine configuration.
 
 ~~~bash
 $ cat <<EOF > 99-machineconfig-nvd-srv-36.yaml
