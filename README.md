@@ -92,9 +92,9 @@ metadata:
   name: 99-master-nvd-srv-36
 spec:
   kernelArguments:
-    - default_hugepagesz=2G
-    - hugepagesz=2G
-    - hugepages=32768
+    - default_hugepagesz=1G
+    - hugepagesz=1G
+    - hugepages=16
     - intel_iommu=on
     - iommu=pt
     - pci=realloc=on
