@@ -373,19 +373,58 @@ kind: NicClusterPolicy
 metadata:
   name: nic-cluster-policy
 spec:
+  nicConfigurationOperator:
+    configurationDaemon:
+      containerResources:
+      - limits:
+          cpu: 1000m
+          memory: 10000Mi
+        name: nic-configuration-daemon
+        requests:
+          cpu: 1000m
+          memory: 10000Mi
+      image: nic-configuration-operator-daemon
+      repository: nvcr.io/nvidia/mellanox
+      version: network-operator-v26.1.0
+    logLevel: debug
+    nicFirmwareStorage:
+      availableStorageSize: 1Gi
+      create: false
+      pvcName: nic-fw-storage-pvc
+    operator:
+      containerResources:
+      - limits:
+          cpu: 1000m
+          memory: 10000Mi
+        name: nic-configuration-operator
+        requests:
+          cpu: 1000m
+          memory: 10000Mi
+      image: nic-configuration-operator
+      repository: nvcr.io/nvidia/mellanox
+      version: network-operator-v26.1.0
   nvIpam:
     image: nvidia-k8s-ipam
-    repository: nvcr.io/nvstaging/mellanox
-    sourceRepository: nvidia-k8s-ipam
-    version: network-operator-v26.1.0-beta.2
-    nSpectScope: gov-ready
+    repository: nvcr.io/nvidia/mellanox
+    version: network-operator-v26.1.0
+    enableWebhook: false
   ofedDriver:
     env:
     - name: UNLOAD_STORAGE_MODULES
       value: "true"
+    forcePrecompiled: false
     image: doca-driver
+    livenessProbe:
+      initialDelaySeconds: 30
+      periodSeconds: 30
+    readinessProbe:
+      initialDelaySeconds: 10
+      periodSeconds: 30
     repository: nvcr.io/nvstaging/mellanox
-    version: doca3.2.0-25.10-1.1.2.0-0
+    startupProbe:
+      initialDelaySeconds: 10
+      periodSeconds: 20
+    terminationGracePeriodSeconds: 300
     upgradePolicy:
       autoUpgrade: true
       drain:
@@ -394,50 +433,12 @@ spec:
         force: true
         timeoutSeconds: 300
       maxParallelUpgrades: 1
-    startupProbe:
-      initialDelaySeconds: 10
-      periodSeconds: 10
-    livenessProbe:
-      initialDelaySeconds: 30
-      periodSeconds: 30
-    readinessProbe:
-      initialDelaySeconds: 10
-      periodSeconds: 30
-  nicConfigurationOperator:
-    operator:
-      image: nic-configuration-operator
-      repository: nvcr.io/nvstaging/mellanox
-      version: network-operator-v25.10.0-beta.4
-      containerResources:
-        - name: nic-configuration-operator
-          limits:
-            cpu: 1000m
-            memory: 10000Mi
-          requests:
-            cpu: 1000m
-            memory: 10000Mi
-    configurationDaemon:
-      image: nic-configuration-operator-daemon
-      repository: nvcr.io/nvstaging/mellanox
-      version: network-operator-v25.10.0-beta.4
-      containerResources:
-        - name: nic-configuration-daemon
-          limits:
-            cpu: 1000m
-            memory: 5000Mi
-          requests:
-            cpu: 1000m
-            memory: 5000Mi
-    nicFirmwareStorage: # configure your own storage params
-      create: true
-      pvcName: nic-fw-storage-pvc
-      storageClassName: lvms-vg1
-      availableStorageSize: 1Gi
-    logLevel: debug
+      safeLoad: false
+    version: doca3.3.0-26.01-0.4.6.0-1
   spectrumXOperator:
     image: spectrum-x-operator
-    repository: nvcr.io/nvstaging/mellanox
-    version: network-operator-v25.10.0-beta.4
+    repository: nvcr.io/nvidia/mellanox
+    version: network-operator-v26.1.0
 EOF
 ~~~
 
