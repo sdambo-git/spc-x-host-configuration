@@ -19,7 +19,7 @@
 - [Configuring LLDPD Daemonset](#configuring-lldpd-daemonset)
 - [Configuring OVS Offload](#configuring-ovs-offload)
 - [Configure Physical Rail Interface Attributes](#configure-physical-rail-interface-attributes)
-- [Configure Bridges and OVS Flows](#configure-bridges-and-ovs-flows)
+- [Configure Bridges](#configure-bridges)
 - [Configure Spectrum-X CNI](#configure-spectrum-x-CNI)
 - [Validate Spectrum-X Topology](#validate-spectrum-x-topology)
 
@@ -1215,7 +1215,8 @@ pci/0000:37:00.0: mode switchdev inline-mode none encap-mode basic
 This completes the physical interface confguration section.
 
 ## Configure Bridges
-The bridges part of configuration could be done using NMState Policy, The following example configures port eth_rail0
+The bridges part of configuration could be done using NMState Policy, The following example configures port eth_rail0.
+
 No need to configure ovs flows, The SPX Operator configures the OVS flows.
 
 ~~~bash
