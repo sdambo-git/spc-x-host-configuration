@@ -79,7 +79,7 @@ Before completing this section make sure to test that it is possible to login as
 
 ## Set Hugepages and IOMMU off
 
-We need to set hughpages and disable iommu.  This can be achieved with the following machine configuration.
+We need to set hughpages and iommu.  This can be achieved with the following machine configuration.
 
 ~~~bash
 $ cat <<EOF > 99-machineconfig-nvd-srv-36.yaml
@@ -87,14 +87,16 @@ apiVersion: machineconfiguration.openshift.io/v1
 kind: MachineConfig
 metadata:
   labels:
-    machineconfiguration.openshift.io/role: master
+    machineconfiguration.openshift.io/role: worker
   name: 99-master-nvd-srv-36
 spec:
   kernelArguments:
     - default_hugepagesz=1G
     - hugepagesz=1G
     - hugepages=16
-    - iommu=off
+    - intel_iommu=on
+    - iommu=pt
+    - pci=realloc=on
 EOF
 ~~~
 
@@ -106,6 +108,43 @@ machineconfig.machineconfiguration.openshift.io/99-master-nvd-srv-36 created
 ~~~
 
 To validate this has been configured we can use `dmesg` output and `oc describe node` to see iommu and hughpages are set.
+
+## Set RDMA Subsystem Namespace Awareness
+
+enable RDMA device namespace separation, which is essential for proper resource isolation in containerized environments.
+
+~~~bash
+IB_CORE=$(echo "options ib_core netns_mode=0" | base64 -w 0)
+~~~
+
+~~~bash
+cat <<EOF > 99-worker-ib-core-netns.yaml
+apiVersion: machineconfiguration.openshift.io/v1
+kind: MachineConfig
+metadata:
+  labels:
+    machineconfiguration.openshift.io/role: worker
+  name: 99-worker-ib-core-netns
+spec:
+  config:
+    ignition:
+      version: 3.2.0
+    storage:
+      files:
+      - contents:
+          source: data:text/plain;base64,${IB_CORE}
+        mode: 420
+        overwrite: true
+        path: /etc/modprobe.d/ib_core.conf
+EOF
+~~~
+
+Create the machine configuration on the cluster.  This will cause nodes to reboot in a rolling fashion and can be monitored with `oc get mcp`.
+
+~~~bash
+oc create -f 99-worker-ib-core-netns.yaml 
+machineconfig.machineconfiguration.openshift.io/99-worker-ib-core-netns created
+~~~
 
 ## Set UDEV Rules for Rail Device Names
 
@@ -333,19 +372,58 @@ kind: NicClusterPolicy
 metadata:
   name: nic-cluster-policy
 spec:
+  nicConfigurationOperator:
+    configurationDaemon:
+      containerResources:
+      - limits:
+          cpu: 1000m
+          memory: 10000Mi
+        name: nic-configuration-daemon
+        requests:
+          cpu: 1000m
+          memory: 10000Mi
+      image: nic-configuration-operator-daemon
+      repository: nvcr.io/nvidia/mellanox
+      version: network-operator-v26.1.0
+    logLevel: debug
+    nicFirmwareStorage:
+      availableStorageSize: 1Gi
+      create: false
+      pvcName: nic-fw-storage-pvc
+    operator:
+      containerResources:
+      - limits:
+          cpu: 1000m
+          memory: 10000Mi
+        name: nic-configuration-operator
+        requests:
+          cpu: 1000m
+          memory: 10000Mi
+      image: nic-configuration-operator
+      repository: nvcr.io/nvidia/mellanox
+      version: network-operator-v26.1.0
   nvIpam:
     image: nvidia-k8s-ipam
-    repository: nvcr.io/nvstaging/mellanox
-    sourceRepository: nvidia-k8s-ipam
-    version: network-operator-v26.1.0-beta.2
-    nSpectScope: gov-ready
+    repository: nvcr.io/nvidia/mellanox
+    version: network-operator-v26.1.0
+    enableWebhook: false
   ofedDriver:
     env:
     - name: UNLOAD_STORAGE_MODULES
       value: "true"
+    forcePrecompiled: false
     image: doca-driver
+    livenessProbe:
+      initialDelaySeconds: 30
+      periodSeconds: 30
+    readinessProbe:
+      initialDelaySeconds: 10
+      periodSeconds: 30
     repository: nvcr.io/nvstaging/mellanox
-    version: doca3.2.0-25.10-1.1.2.0-0
+    startupProbe:
+      initialDelaySeconds: 10
+      periodSeconds: 20
+    terminationGracePeriodSeconds: 300
     upgradePolicy:
       autoUpgrade: true
       drain:
@@ -354,50 +432,12 @@ spec:
         force: true
         timeoutSeconds: 300
       maxParallelUpgrades: 1
-    startupProbe:
-      initialDelaySeconds: 10
-      periodSeconds: 10
-    livenessProbe:
-      initialDelaySeconds: 30
-      periodSeconds: 30
-    readinessProbe:
-      initialDelaySeconds: 10
-      periodSeconds: 30
-  nicConfigurationOperator:
-    operator:
-      image: nic-configuration-operator
-      repository: nvcr.io/nvstaging/mellanox
-      version: network-operator-v25.10.0-beta.4
-      containerResources:
-        - name: nic-configuration-operator
-          limits:
-            cpu: 1000m
-            memory: 10000Mi
-          requests:
-            cpu: 1000m
-            memory: 10000Mi
-    configurationDaemon:
-      image: nic-configuration-operator-daemon
-      repository: nvcr.io/nvstaging/mellanox
-      version: network-operator-v25.10.0-beta.4
-      containerResources:
-        - name: nic-configuration-daemon
-          limits:
-            cpu: 1000m
-            memory: 5000Mi
-          requests:
-            cpu: 1000m
-            memory: 5000Mi
-    nicFirmwareStorage: # configure your own storage params
-      create: true
-      pvcName: nic-fw-storage-pvc
-      storageClassName: lvms-vg1
-      availableStorageSize: 1Gi
-    logLevel: debug
+      safeLoad: false
+    version: doca3.3.0-26.01-0.4.6.0-1
   spectrumXOperator:
     image: spectrum-x-operator
-    repository: nvcr.io/nvstaging/mellanox
-    version: network-operator-v25.10.0-beta.4
+    repository: nvcr.io/nvidia/mellanox
+    version: network-operator-v26.1.0
 EOF
 ~~~
 
