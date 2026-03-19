@@ -776,7 +776,7 @@ spec:
   nicSelector:
     nicType: a2dc
     pciAddresses:
-    - "0000:18:00.0"
+    - 0000:18:00.0
     - 0000:1a:00.0
     - 0000:3a:00.0
     - 0000:4d:00.0
