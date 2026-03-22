@@ -766,25 +766,19 @@ $ cat <<EOF > configtemplate.yaml
 apiVersion: configuration.net.nvidia.com/v1alpha1
 kind: NicConfigurationTemplate
 metadata:
-  creationTimestamp: "2025-12-31T10:09:25Z"
-  generation: 4
   name: spc-x-config
   namespace: nvidia-network-operator
-  resourceVersion: "72388744"
-  uid: 7ee2a727-31c5-468f-956c-cd562c5ca155
 spec:
   nicSelector:
     nicType: a2dc
     pciAddresses:
     - 0000:18:00.0
-    - 0000:1a:00.0
     - 0000:3a:00.0
     - 0000:4d:00.0
     - 0000:5d:00.0
     - 0000:9b:00.0
     - 0000:ba:00.0
     - 0000:ca:00.0
-    - 0000:cc:00.0
     - 0000:db:00.0
   nodeSelector:
     node-role.kubernetes.io/worker: ""
@@ -795,29 +789,7 @@ spec:
     spectrumXOptimized:
       enabled: true
       overlay: none
-      version: RA2.0
-status:
-  nicDevices:
-  - dell-h200-2-a2dc-vn0kk4nrfcbnv495600o
-  - dell-h200-2-a2dc-vn0kk4nrfcbnv48b637k
-  - dell-h200-2-a2dc-vn0kk4nrfcbnv48b63f3
-  - dell-h200-3-a2dc-vn0kk4nrfcbnv48b63k3
-  - dell-h200-3-a2dc-vn0kk4nrfcbnv48b63fv
-  - dell-h200-3-a2dc-vn0kk4nrfcbnv48b63bk
-  - dell-h200-3-a2dc-vn0kk4nrfcbnv48u600r
-  - dell-h200-2-a2dc-vn0kk4nrfcbnv48b63ch
-  - dell-h200-2-a2dc-vn0kk4nrfcbnv48b63fz
-  - dell-h200-3-a2dc-vn0kk4nrfcbnv48b63ek
-  - dell-h200-2-a2dc-vn0kk4nrfcbnv495604l
-  - dell-h200-2-a2dc-vn0kk4nrfcbnv495600m
-  - dell-h200-2-a2dc-vn0kk4nrfcbnv495603b
-  - dell-h200-2-a2dc-vn0kk4nrfcbnv48b63jr
-  - dell-h200-2-a2dc-vn0kk4nrfcbnv48b63jt
-  - dell-h200-3-a2dc-vn0kk4nrfcbnv48b63jw
-  - dell-h200-3-a2dc-vn0kk4nrfcbnv48b63j5
-  - dell-h200-3-a2dc-vn0kk4nrfcbnv48b63dz
-  - dell-h200-3-a2dc-vn0kk4nrfcbnv48b63ka
-  - dell-h200-3-a2dc-vn0kk4nrfcbnv48b63es
+      version: RA2.1
 EOF
 ~~~
 
