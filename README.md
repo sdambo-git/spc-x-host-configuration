@@ -679,7 +679,7 @@ oc apply -f nginx-route.yaml
 
 NVIDIA NIC Configuration Operator provides Kubernetes API(Custom Resource Definition) to allow FW configuration on Nvidia NICs in a coordinated manner. It deploys, based on settings in the NicClusterPolicy, a configuration daemon on each of the desired nodes to configure Nvidia NICs there. NVIDIA NIC Configuration Operator uses the Maintenance Operator to prepare a node for maintenance before the actual configuration.
 
-We need to define the following NicFirmwareSource file.  This tells the operator where to get the firmware.
+We need to define the following NicFirmwareSource file.  This tells the operator where to get the firmware. for RA2.1 you don't need to specify the doca spcx CC. It's built into the nic daemon image
 
 ~~~bash
 $ cat <<EOF > fwsource.yaml
@@ -689,8 +689,7 @@ metadata:
   name: spc-x-doca-pcc
   namespace: nvidia-network-operator
 spec:
-  bfbUrlSource: https://content.mellanox.com/BlueField/BFBs/Ubuntu22.04/bf-bundle-3.1.0-76_25.07_ubuntu-22.04_prod.bfb # the newest version I have found, you may skip this for now
-  docaSpcXCCUrlSource: http://nginx-fileserver-default.apps.doca9.nvidia.eng.rdu2.dc.redhat.com/doca-spcx-cc_3.1.0105-1_amd64.deb
+  bfbUrlSource: https://content.mellanox.com/BlueField/FW-Bundle/bf-fwbundle-3.3.0-202_26.01-prod.bfb 
 EOF
 ~~~
 
