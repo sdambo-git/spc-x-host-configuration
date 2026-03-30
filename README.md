@@ -1157,8 +1157,8 @@ EOF
 Once we generate the SriovNetworkNodePolicy we can create it on the cluster.  We will repeat this for each rail.
 
 ~~~bash
-$ oc create -f rail-example-sriovnetworknodepolicy.yaml 
-sriovnetworknodepolicy.sriovnetwork.openshift.io/rail-x created
+$ oc apply -f snnp-eth-rail0-node3.yaml
+sriovnetworknodepolicy.sriovnetwork.openshift.io/eth-rail0-node3 created
 ~~~
 
 We can validate the configuration by using a `debug` pod and checking the values.  In this example we used emp55s0np0 as our test interface.
