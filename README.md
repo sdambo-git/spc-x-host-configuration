@@ -1111,42 +1111,46 @@ system_version      : "9.6"
 We can provide those same settings via a SriovNetworkNodePolicy for each rail interface.  An example of the policy which provides the `switchdev` mode, mtu and vfs count is below.
 
 ~~~bash
-$ cat <<EOF > rail-example-sriovnetworknodepolicy.yaml
+$ cat <<EOF > snnp-eth-rail0-node2.yaml
 apiVersion: sriovnetwork.openshift.io/v1
 kind: SriovNetworkNodePolicy
 metadata:
-  name: snnp-eth_rail1
+  name: eth-rail0-node2
   namespace: openshift-sriov-network-operator
 spec:
-  deviceType: netdevice
-  eSwitchMode: "switchdev"
+  eSwitchMode: switchdev
   mtu: 9216
   nicSelector:
-    pfNames: ["eth_rail1"]
+    pfNames: ["eth_rail0"]
   numVfs: 1
   isRdma: true
-  linkType: eth
-  resourceName: eth_rail1
+  externallyManaged: false
+  linkType: ETH
+  resourceName: eth_rail0_node2
   nodeSelector:
-    feature.node.kubernetes.io/network-sriov.capable: "true"
----
+    kubernetes.io/hostname: dell-h200-2
+EOF
+~~~
+
+~~~bash
+$ cat <<EOF > snnp-eth-rail0-node3.yaml
 apiVersion: sriovnetwork.openshift.io/v1
 kind: SriovNetworkNodePolicy
 metadata:
-  name: snnp-eth_rail2
+  name: eth-rail0-node3
   namespace: openshift-sriov-network-operator
 spec:
-  deviceType: netdevice
-  eSwitchMode: "switchdev"
+  eSwitchMode: switchdev
   mtu: 9216
   nicSelector:
-    pfNames: ["eth_rail2"]
+    pfNames: ["eth_rail0"]
   numVfs: 1
   isRdma: true
-  linkType: eth
-  resourceName: eth_rail2
+  externallyManaged: false
+  linkType: ETH
+  resourceName: eth_rail0_node3
   nodeSelector:
-    feature.node.kubernetes.io/network-sriov.capable: "true"
+    kubernetes.io/hostname: dell-h200-3
 EOF
 ~~~
 
