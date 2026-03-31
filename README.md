@@ -1112,7 +1112,17 @@ We can provide those same settings via a SriovNetworkNodePolicy for each rail in
 
 Pay Attention !! according to the RA2.1 the externallyManaged need to be true. when applying set it to false , because in other case the vf will be remain at 0 and eSwitchMode will remain at legacy ! 
 
-Give it some time and change back the externallyManaged to true
+Give it some time and change back the externallyManaged to true . we can use patching for that for example:
+~~~bash
+for p in $(kubectl get sriovnetworknodepolicy -n openshift-sriov-network-operator -o name); do echo "Patching $p..."; kubectl patch $p -n openshift-sriov-network-operator --type merge -p '{"spec":{"externallyManaged":true}}' 2>&1; done
+Patching sriovnetworknodepolicy.sriovnetwork.openshift.io/eth-rail0-node2...
+sriovnetworknodepolicy.sriovnetwork.openshift.io/eth-rail0-node2 patched
+Patching sriovnetworknodepolicy.sriovnetwork.openshift.io/eth-rail0-node3...
+sriovnetworknodepolicy.sriovnetwork.openshift.io/eth-rail0-node3 patched
+.
+.
+~~~
+
 ~~~bash
 $ cat <<EOF > snnp-eth-rail0-node2.yaml
 apiVersion: sriovnetwork.openshift.io/v1
