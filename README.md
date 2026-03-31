@@ -1259,25 +1259,27 @@ The next thing we need to configure is the Spectrum-X CNI.  This is composed of 
 The nv-ipam CIDRPool looks similar to the following example.  Please adjust the ipaddressing and nodeName information to match the environment and create one for each rail interface.
 
 ~~~bash
+$ cat <<EOF > cidrpool_rail0.yaml
 apiVersion: nv-ipam.nvidia.com/v1alpha1
 kind: CIDRPool
 metadata:
-  name: rail-1
+  name: eth-rail0
   namespace: nvidia-network-operator
 spec:
-  cidr: 192.168.16.0/24
+  cidr: 172.16.0.0/15
   gatewayIndex: 0
   perNodeNetworkPrefix: 31
   routes:
-  - dst: 192.168.16.0/24
-  - dst: 192.168.16.0/20
+  - dst: 172.16.0.0/15
+  - dst: 172.16.0.0/12
   staticAllocations:
-  - gateway: 192.168.16.31
-    nodeName: dgx-hera-15
-    prefix: 192.168.16.30/31
-  - gateway: 192.168.16.33
-    nodeName: dgx-hera-16
-    prefix: 192.168.16.32/31
+  - gateway: 172.16.0.5
+    nodeName: dell-h200-2
+    prefix: 172.16.0.4/31
+  - gateway: 172.16.0.7
+    nodeName: dell-h200-3
+    prefix: 172.16.0.6/31
+EOF
 ~~~
 
 The OVSNetwork custom resource file looks similar to the following example.   Each rail will require a OVSNetwork configuration.
