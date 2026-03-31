@@ -1167,27 +1167,19 @@ sriovnetworknodepolicy.sriovnetwork.openshift.io/eth-rail0-node3 created
 We can validate the configuration by using a `debug` pod and checking the values.  In this example we used emp55s0np0 as our test interface.
 
 ~~~bash
-$ oc debug node/nvd-srv-30.nvidia.eng.rdu2.dc.redhat.com
-Starting pod/nvd-srv-30nvidiaengrdu2dcredhatcom-debug-f6thp ...
-To use host binaries, run `chroot /host`
-Pod IP: 10.6.135.9
-If you don't see a command prompt, try pressing enter.
-sh-5.1# chroot /host
+$ oc debug node/dell-h200-2 -- chroot /host bash -c 'for i in 0 1 2 3 4 5 6 7; do PCI=$(readlink -f /sys/class/net/eth_rail${i}/device | xargs basename); MODE=$(devlink dev eswitch show pci/$PCI 2>&1); echo "eth_rail${i} ($PCI): $MODE"; done' 2>&1
+Starting pod/dell-h200-2-debug-jjc96 ...
+To use host binaries, run `chroot /host`. Instead, if you need to access host namespaces, run `nsenter -a -t 1`.
+eth_rail0 (0000:18:00.0): pci/0000:18:00.0: mode switchdev inline-mode none encap-mode basic
+eth_rail1 (0000:3a:00.0): pci/0000:3a:00.0: mode switchdev inline-mode none encap-mode basic
+eth_rail2 (0000:4d:00.0): pci/0000:4d:00.0: mode switchdev inline-mode none encap-mode basic
+eth_rail3 (0000:5d:00.0): pci/0000:5d:00.0: mode switchdev inline-mode none encap-mode basic
+eth_rail4 (0000:9b:00.0): pci/0000:9b:00.0: mode switchdev inline-mode none encap-mode basic
+eth_rail5 (0000:ba:00.0): pci/0000:ba:00.0: mode switchdev inline-mode none encap-mode basic
+eth_rail6 (0000:ca:00.0): pci/0000:ca:00.0: mode switchdev inline-mode none encap-mode basic
+eth_rail7 (0000:db:00.0): pci/0000:db:00.0: mode switchdev inline-mode none encap-mode basic
 
-sh-5.1# cat /sys/class/net/enp55s0np0/device/sriov_numvfs
-1
-
-sh-5.1# ip link |grep enp55
-26: enp55s0np0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 9216 qdisc mq state UP mode DEFAULT group default qlen 1000
-29: enp55s0np0_0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc mq state UP mode DEFAULT group default qlen 1000
-    altname enp55s0npf0vf0
-31: enp55s0v0: <BROADCAST,MULTICAST> mtu 9216 qdisc noop state DOWN mode DEFAULT group default qlen 1000
-
-sh-5.1# grep PCI_SLOT_NAME /sys/class/net/enp55s0np0/device/uevent
-PCI_SLOT_NAME=0000:37:00.0
-
-sh-5.1# devlink dev eswitch show pci/0000:37:00.0
-pci/0000:37:00.0: mode switchdev inline-mode none encap-mode basic
+Removing debug pod ...
 ~~~
 
 This completes the physical interface confguration section.
