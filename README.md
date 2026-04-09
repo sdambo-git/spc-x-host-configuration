@@ -1715,7 +1715,7 @@ spec:
                     -x UCC_TLS=ucp \
                     -x UCC_TL_NCCL_TUNE=0 \
                     -x UCC_TL_UCP_TUNE=allgather:@0 \
-                    -x GLOO_SOCKET_IFNAME=eth0
+                    -x GLOO_SOCKET_IFNAME=eth0 \
                     -x HYDRA_FULL_ERROR=1 \
                     -x NCCL_DEBUG=warn \
                     -x NCCL_IB_QPS_PER_CONNECTION=2 \
