@@ -961,54 +961,37 @@ sriovnetworknodepolicy.sriovnetwork.openshift.io/eth-rail0-node3 patched
 ~~~
 
 ~~~bash
-$ cat <<EOF > snnp-eth-rail0-node2.yaml
+$ cat <<EOF > snnp-eth-rail0.yaml
 apiVersion: sriovnetwork.openshift.io/v1
 kind: SriovNetworkNodePolicy
 metadata:
-  name: eth-rail0-node2
+  name: eth-rail0
   namespace: openshift-sriov-network-operator
 spec:
+  bridge:
+    ovs: {}
+  deviceType: netdevice
   eSwitchMode: switchdev
+  isRdma: true
+  linkType: ETH
   mtu: 9216
   nicSelector:
-    pfNames: ["eth_rail0"]
-  numVfs: 1
-  isRdma: true
-  externallyManaged: false
-  linkType: ETH
-  resourceName: eth_rail0_node2
+    pfNames:
+    - eth_rail0
   nodeSelector:
-    kubernetes.io/hostname: dell-h200-2
+    node-role.kubernetes.io/worker: ""
+  numVfs: 1
+  priority: 99
+  resourceName: eth_rail0
 EOF
 ~~~
 
-~~~bash
-$ cat <<EOF > snnp-eth-rail0-node3.yaml
-apiVersion: sriovnetwork.openshift.io/v1
-kind: SriovNetworkNodePolicy
-metadata:
-  name: eth-rail0-node3
-  namespace: openshift-sriov-network-operator
-spec:
-  eSwitchMode: switchdev
-  mtu: 9216
-  nicSelector:
-    pfNames: ["eth_rail0"]
-  numVfs: 1
-  isRdma: true
-  externallyManaged: false
-  linkType: ETH
-  resourceName: eth_rail0_node3
-  nodeSelector:
-    kubernetes.io/hostname: dell-h200-3
-EOF
-~~~
 
 Once we generate the SriovNetworkNodePolicy we can create it on the cluster.  We will repeat this for each rail.
 
 ~~~bash
-$ oc apply -f snnp-eth-rail0-node3.yaml
-sriovnetworknodepolicy.sriovnetwork.openshift.io/eth-rail0-node3 created
+$ oc apply -f snnp-eth-rail0.yaml
+sriovnetworknodepolicy.sriovnetwork.openshift.io/eth-rail0 created
 ~~~
 
 We can validate the configuration by using a `debug` pod and checking the values.  In this example we used emp55s0np0 as our test interface.
