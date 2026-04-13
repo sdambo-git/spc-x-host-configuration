@@ -1010,61 +1010,34 @@ Removing debug pod ...
 
 This completes the physical interface confguration section.
 
-## Configure Bridges
-The bridges part of configuration could be done using NMState Policy, The following example configures port eth_rail0.
+## Configure MTU
+The MTU part of configuration could be done using NMState Policy, The following example configures port eth_rail0.
 
 No need to configure ovs flows, The SPX Operator configures the OVS flows.
 
 ~~~bash
-$ cat <<EOF > nmstate_policy_rail0_h200_2.yaml
+$ cat <<EOF > nncp-mtu-rail0.yaml
 apiVersion: nmstate.io/v1
 kind: NodeNetworkConfigurationPolicy
 metadata:
-  name: eth-rail0-h200-2-policy
+  name: nncp-mtu-rail0
 spec:
-  nodeSelector:
-    kubernetes.io/hostname: dell-h200-2
   desiredState:
     interfaces:
-      - name: eth_rail0
-        type: ethernet
-        state: up
-        mtu: 9216
-      - name: br-eth_rail0
-        type: ovs-interface
-        state: up
-        mtu: 9216
-        ipv4:
-          enabled: true
-          address:
-            - ip: 172.31.2.35
-              prefix-length: 31
-      - name: br-eth_rail0
-        type: ovs-bridge
-        state: up
-        bridge:
-          options:
-            fail-mode: secure
-            stp: false
-          port:
-            - name: eth_rail0
-            - name: br-eth_rail0
-        ovs-db:
-          external_ids:
-            rail_uplink: eth_rail0
-            rail_peer_ip: "172.31.2.34"
-    routes:
-      config:
-        - destination: 172.16.0.0/12
-          next-hop-address: 172.31.2.34
-          next-hop-interface: br-eth_rail0
+    - description: mtu 9216 eth_rail0
+      mtu: 9216
+      name: eth_rail0
+      state: up
+      type: ethernet
+  nodeSelector:
+    node-role.kubernetes.io/worker: ""
 EOF
 
 ~~~
 Create the NodeNetworkConfigurationPolicy on the cluster
 
 ~~~bash
-$ oc create -f nmstate_policy_rail0_h200_2.yaml
+$ oc create -f nncp-mtu-rail0.yaml
 ~~~ 
 
 
