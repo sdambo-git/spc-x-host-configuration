@@ -18,7 +18,7 @@
 - [Configuring LLDPD Daemonset](#configuring-lldpd-daemonset)
 - [Configuring OVS Offload](#configuring-ovs-offload)
 - [Configure Physical Rail Interface Attributes](#configure-physical-rail-interface-attributes)
-- [Configure Bridges](#configure-bridges)
+- [Configure MTU](#configure-MTU)
 - [Configure Spectrum-X CNI](#configure-spectrum-x-CNI)
 - [Validate Spectrum-X Topology](#validate-spectrum-x-topology)
 
