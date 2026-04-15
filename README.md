@@ -13,13 +13,12 @@
 - [Configuring NMState Operator](#configuring-nmstate-operator)
 - [Configuring NVIDIA Network Operator](#configuring-nvidia-network-operator)
 - [Configuring NVIDIA Maintenance Operator](#configuring-nvidia-maintenance-operator)
-- [Install HTTP server to serve NIC Firmware files](#Install-HTTP-server-to-serve-NIC-Firmware-files)
 - [Configuring Nic Firmware](#configuring-nic-firmware)
 - [Configuring NVIDIA GPU Operator](#configuring-nvidia-network-operator)
 - [Configuring LLDPD Daemonset](#configuring-lldpd-daemonset)
 - [Configuring OVS Offload](#configuring-ovs-offload)
 - [Configure Physical Rail Interface Attributes](#configure-physical-rail-interface-attributes)
-- [Configure Bridges and OVS Flows](#configure-bridges-and-ovs-flows)
+- [Configure MTU](#configure-MTU)
 - [Configure Spectrum-X CNI](#configure-spectrum-x-CNI)
 - [Validate Spectrum-X Topology](#validate-spectrum-x-topology)
 
@@ -386,10 +385,6 @@ spec:
       repository: nvcr.io/nvidia/mellanox
       version: network-operator-v26.1.0
     logLevel: debug
-    nicFirmwareStorage:
-      availableStorageSize: 1Gi
-      create: false
-      pvcName: nic-fw-storage-pvc
     operator:
       containerResources:
       - limits:
@@ -512,174 +507,12 @@ $ oc get pods -n nvidia-maintenance-operator
 NAME                                                      READY   STATUS    RESTARTS   AGE
 maintenance-operator-controller-manager-995859f88-vq262   1/1     Running   0          18h
 ~~~
-## Install HTTP server to serve NIC Firmware files
-
-In Order to serve the firmware files, we should Install HTTP server on the local cluster. Firstly by creating NFS pv
-
-~~~bash
-$ cat <<EOF > nfs-pv.yaml 
-apiVersion: v1
-kind: PersistentVolume
-metadata:
-  name: nginx-nfs-pvc
-spec:
-  capacity:
-    storage: 10Gi # Define the storage capacity
-  accessModes:
-    - ReadWriteMany # Allows the volume to be mounted as read-write by many nodes
-  nfs:
-    path: /vm_img/NFS # The exported path on your NFS server
-    server: 10.8.231.39 # The IP address of your NFS server
-  persistentVolumeReclaimPolicy: Retain # Retains the volume after the PVC is deleted
-  volumeMode: Filesystem
-EOF
-~~~
-
-We can apply it now with
-
-~~~bash
-$ oc apply -f nfs-pv.yaml
-~~~
-
-Now we need to create a pvc to use it
-
-~~~bash
-$ cat <<EOF > cat nfs-pvc.yaml 
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: nginx-nfs-pvc 
-spec:
-  accessModes:
-    - ReadWriteMany
-  resources:
-    requests:
-      storage: 5Gi
-  volumeName: nginx-nfs-pv
-  storageClassName: ""
-EOF
-~~~
-Now let's apply it
-~~~bash
-oc apply -f nfs-pvc.yaml
-~~~
-
-now we will install NGINX server ( the Nic Configuration Operator can work with http )
-~~~bash
-$ cat <<EOF > nginx_configmap.yaml 
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: nginx-autoindex
-data:
-  default.conf: |
-    server {
-      listen 80;
-      server_name _;
-
-      location / {
-        root /usr/share/nginx/html;
-        autoindex on;
-        autoindex_exact_size off;
-        autoindex_localtime on;
-      }
-    }
-EOF
-~~~
-
-Lets apply the configmap
-
-~~~bash
-oc apply -f nginx_configmap.yaml
-~~~
-
-Nginx Server deployment
-~~~bash
-$ cat <<EOF > nginx-deployment.yaml 
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: nginx-fileserver
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: nginx-fileserver
-  template:
-    metadata:
-      labels:
-        app: nginx-fileserver
-    spec:
-      containers:
-      - name: nginx
-        image: nginx:stable
-        ports:
-        - containerPort: 80
-        volumeMounts:
-        - name: files
-          mountPath: /usr/share/nginx/html
-        - name: nginx-config
-          mountPath: /etc/nginx/conf.d  
-      volumes:
-      - name: files
-        persistentVolumeClaim:
-          claimName: nginx-nfs-pvc
-      - name: nginx-config
-        configMap:
-          name: nginx-autoindex 
-EOF
-~~~
-Now we will deploy it by running
-
-~~~bash
-oc apply -f nginx-deployment.yaml
-~~~
-
-Now, In order for it to be able to serve us, we need to configure service and route
-~~~bash
-$ cat <<EOF > nginx-service.yaml 
-apiVersion: v1
-kind: Service
-metadata:
-  name: nginx-fileserver
-spec:
-  selector:
-    app: nginx-fileserver
-  ports:
-  - name: http
-    port: 80
-    targetPort: 80
-EOF
-~~~
-and apply the service yaml
-~~~bash
-oc apply -f nginx-service.yaml
-~~~
-Lets install the route now
-~~~bash
-$ cat <<EOF > nginx-route.yaml 
-apiVersion: route.openshift.io/v1
-kind: Route
-metadata:
-  name: nginx-fileserver
-spec:
-  to:
-    kind: Service
-    name: nginx-fileserver
-  port:
-    targetPort: http
-EOF
-~~~
-and apply it
-~~~bash
-oc apply -f nginx-route.yaml
-~~~
 
 ## Configuring Nic Firmware
 
 NVIDIA NIC Configuration Operator provides Kubernetes API(Custom Resource Definition) to allow FW configuration on Nvidia NICs in a coordinated manner. It deploys, based on settings in the NicClusterPolicy, a configuration daemon on each of the desired nodes to configure Nvidia NICs there. NVIDIA NIC Configuration Operator uses the Maintenance Operator to prepare a node for maintenance before the actual configuration.
 
-We need to define the following NicFirmwareSource file.  This tells the operator where to get the firmware.
+We need to define the following NicFirmwareSource file.  This tells the operator where to get the firmware. for RA2.1 you don't need to specify the doca spcx CC. It's built into the nic daemon image
 
 ~~~bash
 $ cat <<EOF > fwsource.yaml
@@ -689,8 +522,7 @@ metadata:
   name: spc-x-doca-pcc
   namespace: nvidia-network-operator
 spec:
-  bfbUrlSource: https://content.mellanox.com/BlueField/BFBs/Ubuntu22.04/bf-bundle-3.1.0-76_25.07_ubuntu-22.04_prod.bfb # the newest version I have found, you may skip this for now
-  docaSpcXCCUrlSource: http://nginx-fileserver-default.apps.doca9.nvidia.eng.rdu2.dc.redhat.com/doca-spcx-cc_3.1.0105-1_amd64.deb
+  bfbUrlSource: https://content.mellanox.com/BlueField/FW-Bundle/bf-fwbundle-3.3.0-202_26.01-prod.bfb 
 EOF
 ~~~
 
@@ -766,25 +598,19 @@ $ cat <<EOF > configtemplate.yaml
 apiVersion: configuration.net.nvidia.com/v1alpha1
 kind: NicConfigurationTemplate
 metadata:
-  creationTimestamp: "2025-12-31T10:09:25Z"
-  generation: 4
   name: spc-x-config
   namespace: nvidia-network-operator
-  resourceVersion: "72388744"
-  uid: 7ee2a727-31c5-468f-956c-cd562c5ca155
 spec:
   nicSelector:
     nicType: a2dc
     pciAddresses:
-    - "0000:18:00.0"
-    - 0000:1a:00.0
+    - 0000:18:00.0
     - 0000:3a:00.0
     - 0000:4d:00.0
     - 0000:5d:00.0
     - 0000:9b:00.0
     - 0000:ba:00.0
     - 0000:ca:00.0
-    - 0000:cc:00.0
     - 0000:db:00.0
   nodeSelector:
     node-role.kubernetes.io/worker: ""
@@ -795,29 +621,7 @@ spec:
     spectrumXOptimized:
       enabled: true
       overlay: none
-      version: RA2.0
-status:
-  nicDevices:
-  - dell-h200-2-a2dc-vn0kk4nrfcbnv495600o
-  - dell-h200-2-a2dc-vn0kk4nrfcbnv48b637k
-  - dell-h200-2-a2dc-vn0kk4nrfcbnv48b63f3
-  - dell-h200-3-a2dc-vn0kk4nrfcbnv48b63k3
-  - dell-h200-3-a2dc-vn0kk4nrfcbnv48b63fv
-  - dell-h200-3-a2dc-vn0kk4nrfcbnv48b63bk
-  - dell-h200-3-a2dc-vn0kk4nrfcbnv48u600r
-  - dell-h200-2-a2dc-vn0kk4nrfcbnv48b63ch
-  - dell-h200-2-a2dc-vn0kk4nrfcbnv48b63fz
-  - dell-h200-3-a2dc-vn0kk4nrfcbnv48b63ek
-  - dell-h200-2-a2dc-vn0kk4nrfcbnv495604l
-  - dell-h200-2-a2dc-vn0kk4nrfcbnv495600m
-  - dell-h200-2-a2dc-vn0kk4nrfcbnv495603b
-  - dell-h200-2-a2dc-vn0kk4nrfcbnv48b63jr
-  - dell-h200-2-a2dc-vn0kk4nrfcbnv48b63jt
-  - dell-h200-3-a2dc-vn0kk4nrfcbnv48b63jw
-  - dell-h200-3-a2dc-vn0kk4nrfcbnv48b63j5
-  - dell-h200-3-a2dc-vn0kk4nrfcbnv48b63dz
-  - dell-h200-3-a2dc-vn0kk4nrfcbnv48b63ka
-  - dell-h200-3-a2dc-vn0kk4nrfcbnv48b63es
+      version: RA2.1
 EOF
 ~~~
 
@@ -1139,465 +943,103 @@ system_version      : "9.6"
 
 We can provide those same settings via a SriovNetworkNodePolicy for each rail interface.  An example of the policy which provides the `switchdev` mode, mtu and vfs count is below.
 
+Pay Attention !! according to the RA2.1 the externallyManaged need to be true. when applying set it to false , because in other case the vf will be remain at 0 and eSwitchMode will remain at legacy ! 
+
+Give it some time and change back the externallyManaged to true . we can use patching for that for example:
 ~~~bash
-$ cat <<EOF > rail-example-sriovnetworknodepolicy.yaml
+for p in $(kubectl get sriovnetworknodepolicy -n openshift-sriov-network-operator -o name); do echo "Patching $p..."; kubectl patch $p -n openshift-sriov-network-operator --type merge -p '{"spec":{"externallyManaged":true}}' 2>&1; done
+Patching sriovnetworknodepolicy.sriovnetwork.openshift.io/eth-rail0-node2...
+sriovnetworknodepolicy.sriovnetwork.openshift.io/eth-rail0-node2 patched
+Patching sriovnetworknodepolicy.sriovnetwork.openshift.io/eth-rail0-node3...
+sriovnetworknodepolicy.sriovnetwork.openshift.io/eth-rail0-node3 patched
+.
+.
+~~~
+
+~~~bash
+$ cat <<EOF > snnp-eth-rail0.yaml
 apiVersion: sriovnetwork.openshift.io/v1
 kind: SriovNetworkNodePolicy
 metadata:
-  name: snnp-eth_rail1
+  name: eth-rail0
   namespace: openshift-sriov-network-operator
 spec:
+  bridge:
+    ovs: {}
   deviceType: netdevice
-  eSwitchMode: "switchdev"
+  eSwitchMode: switchdev
+  isRdma: true
+  linkType: ETH
   mtu: 9216
   nicSelector:
-    pfNames: ["eth_rail1"]
-  numVfs: 1
-  isRdma: true
-  linkType: eth
-  resourceName: eth_rail1
+    pfNames:
+    - eth_rail0
   nodeSelector:
-    feature.node.kubernetes.io/network-sriov.capable: "true"
----
-apiVersion: sriovnetwork.openshift.io/v1
-kind: SriovNetworkNodePolicy
-metadata:
-  name: snnp-eth_rail2
-  namespace: openshift-sriov-network-operator
-spec:
-  deviceType: netdevice
-  eSwitchMode: "switchdev"
-  mtu: 9216
-  nicSelector:
-    pfNames: ["eth_rail2"]
+    node-role.kubernetes.io/worker: ""
   numVfs: 1
-  isRdma: true
-  linkType: eth
-  resourceName: eth_rail2
-  nodeSelector:
-    feature.node.kubernetes.io/network-sriov.capable: "true"
+  priority: 99
+  resourceName: eth_rail0
 EOF
 ~~~
+
 
 Once we generate the SriovNetworkNodePolicy we can create it on the cluster.  We will repeat this for each rail.
 
 ~~~bash
-$ oc create -f rail-example-sriovnetworknodepolicy.yaml 
-sriovnetworknodepolicy.sriovnetwork.openshift.io/rail-x created
+$ oc apply -f snnp-eth-rail0.yaml
+sriovnetworknodepolicy.sriovnetwork.openshift.io/eth-rail0 created
 ~~~
 
 We can validate the configuration by using a `debug` pod and checking the values.  In this example we used emp55s0np0 as our test interface.
 
 ~~~bash
-$ oc debug node/nvd-srv-30.nvidia.eng.rdu2.dc.redhat.com
-Starting pod/nvd-srv-30nvidiaengrdu2dcredhatcom-debug-f6thp ...
-To use host binaries, run `chroot /host`
-Pod IP: 10.6.135.9
-If you don't see a command prompt, try pressing enter.
-sh-5.1# chroot /host
+$ oc debug node/dell-h200-2 -- chroot /host bash -c 'for i in 0 1 2 3 4 5 6 7; do PCI=$(readlink -f /sys/class/net/eth_rail${i}/device | xargs basename); MODE=$(devlink dev eswitch show pci/$PCI 2>&1); echo "eth_rail${i} ($PCI): $MODE"; done' 2>&1
+Starting pod/dell-h200-2-debug-jjc96 ...
+To use host binaries, run `chroot /host`. Instead, if you need to access host namespaces, run `nsenter -a -t 1`.
+eth_rail0 (0000:18:00.0): pci/0000:18:00.0: mode switchdev inline-mode none encap-mode basic
+eth_rail1 (0000:3a:00.0): pci/0000:3a:00.0: mode switchdev inline-mode none encap-mode basic
+eth_rail2 (0000:4d:00.0): pci/0000:4d:00.0: mode switchdev inline-mode none encap-mode basic
+eth_rail3 (0000:5d:00.0): pci/0000:5d:00.0: mode switchdev inline-mode none encap-mode basic
+eth_rail4 (0000:9b:00.0): pci/0000:9b:00.0: mode switchdev inline-mode none encap-mode basic
+eth_rail5 (0000:ba:00.0): pci/0000:ba:00.0: mode switchdev inline-mode none encap-mode basic
+eth_rail6 (0000:ca:00.0): pci/0000:ca:00.0: mode switchdev inline-mode none encap-mode basic
+eth_rail7 (0000:db:00.0): pci/0000:db:00.0: mode switchdev inline-mode none encap-mode basic
 
-sh-5.1# cat /sys/class/net/enp55s0np0/device/sriov_numvfs
-1
-
-sh-5.1# ip link |grep enp55
-26: enp55s0np0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 9216 qdisc mq state UP mode DEFAULT group default qlen 1000
-29: enp55s0np0_0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc mq state UP mode DEFAULT group default qlen 1000
-    altname enp55s0npf0vf0
-31: enp55s0v0: <BROADCAST,MULTICAST> mtu 9216 qdisc noop state DOWN mode DEFAULT group default qlen 1000
-
-sh-5.1# grep PCI_SLOT_NAME /sys/class/net/enp55s0np0/device/uevent
-PCI_SLOT_NAME=0000:37:00.0
-
-sh-5.1# devlink dev eswitch show pci/0000:37:00.0
-pci/0000:37:00.0: mode switchdev inline-mode none encap-mode basic
+Removing debug pod ...
 ~~~
 
 This completes the physical interface confguration section.
 
-## Configure Bridges and OVS Flows
-The bridges part of configuration could be done using NMState Policy, The following example configures port eth_rail0
+## Configure MTU
+The MTU part of configuration could be done using NMState Policy, The following example configures port eth_rail0.
+
+No need to configure ovs flows, The SPX Operator configures the OVS flows.
 
 ~~~bash
-$ cat <<EOF > nmstate_policy_rail0_h200_2.yaml
+$ cat <<EOF > nncp-mtu-rail0.yaml
 apiVersion: nmstate.io/v1
 kind: NodeNetworkConfigurationPolicy
 metadata:
-  name: eth-rail0-h200-2-policy
+  name: nncp-mtu-rail0
 spec:
-  nodeSelector:
-    kubernetes.io/hostname: dell-h200-2
   desiredState:
     interfaces:
-      - name: eth_rail0
-        type: ethernet
-        state: up
-        mtu: 9216
-      - name: br-eth_rail0
-        type: ovs-interface
-        state: up
-        mtu: 9216
-        ipv4:
-          enabled: true
-          address:
-            - ip: 172.31.2.35
-              prefix-length: 31
-      - name: br-eth_rail0
-        type: ovs-bridge
-        state: up
-        bridge:
-          options:
-            fail-mode: secure
-            stp: false
-          port:
-            - name: eth_rail0
-            - name: br-eth_rail0
-        ovs-db:
-          external_ids:
-            rail_uplink: eth_rail0
-            rail_peer_ip: "172.31.2.34"
-    routes:
-      config:
-        - destination: 172.16.0.0/12
-          next-hop-address: 172.31.2.34
-          next-hop-interface: br-eth_rail0
+    - description: mtu 9216 eth_rail0
+      mtu: 9216
+      name: eth_rail0
+      state: up
+      type: ethernet
+  nodeSelector:
+    node-role.kubernetes.io/worker: ""
 EOF
 
 ~~~
 Create the NodeNetworkConfigurationPolicy on the cluster
 
 ~~~bash
-$ oc create -f nmstate_policy_rail0_h200_2.yaml
+$ oc create -f nncp-mtu-rail0.yaml
 ~~~ 
 
-These manual commands can be wrapped into a script where we can programatically create the bridges and flow and recover them when the Openvswitch service restarts or reloads.  The first step is to build a script from the commands.  I envision this script as one that discovers the eth_rail(x) devices on the hosts and then proceeds to create and configure the bridges for each host.  The example script below contains some of that 
-
-~~~bash
-$ cat <<'EOF' > spectrum-flows.sh
-#!/bin/bash
-# Spectrum-X OVS bridge flow setup script
-# Deployed via MachineConfig as /etc/scripts/spectrum-br-flows.sh
-#
-# This script waits for nmstate to create OVS bridges and configure IPs,
-# then adds OpenFlow rules for Spectrum-X traffic.
-# Note: rp_filter is also set by /etc/sysctl.d/99-spectrum-rp-filter.conf
-#       and /etc/NetworkManager/dispatcher.d/99-spectrum-rp-filter
-#       but this script sets it again after nmstate finishes to ensure it sticks.
-#
-# Config file format (/etc/spectrum-config-map):
-#   HOSTNAME:INTERFACE:IPADDRESS:SUBNET:GATEWAY:TORIPADDRESS
-
-echo "Gathering the hostname..."
-SYSTEM=`hostname`
-
-while IFS=':' read -r HOSTNAME INTERFACE IPADDRESS SUBNET GATEWAY TORIPADDRESS
-do
-  if [[ "$SYSTEM" == "$HOSTNAME" ]]
-  then
-    echo "Processing bridge br-$INTERFACE..."
-
-    # Wait for bridge to be created by nmstate (up to 120 seconds)
-    MAX_WAIT=120
-    WAIT_COUNT=0
-    echo "Waiting for bridge br-$INTERFACE to be created by nmstate..."
-    while ! ovs-vsctl br-exists br-$INTERFACE; do
-        if [[ $WAIT_COUNT -ge $MAX_WAIT ]]; then
-            echo "ERROR: Bridge br-$INTERFACE does not exist after ${MAX_WAIT}s, skipping..."
-            continue 2
-        fi
-        sleep 5
-        WAIT_COUNT=$((WAIT_COUNT + 5))
-        echo "  Waiting... ($WAIT_COUNT/${MAX_WAIT}s)"
-    done
-    echo "Bridge br-$INTERFACE found!"
-
-    # Wait for IP to be configured on internal interface (indicates nmstate finished)
-    MAX_WAIT=120
-    WAIT_COUNT=0
-    echo "Waiting for IP $IPADDRESS to be configured on br-$INTERFACE..."
-    while ! ip addr show br-$INTERFACE 2>/dev/null | grep -q "$IPADDRESS"; do
-        if [[ $WAIT_COUNT -ge $MAX_WAIT ]]; then
-            echo "ERROR: IP $IPADDRESS not configured on br-$INTERFACE after ${MAX_WAIT}s, skipping..."
-            continue 2
-        fi
-        sleep 5
-        WAIT_COUNT=$((WAIT_COUNT + 5))
-        echo "  Waiting for IP... ($WAIT_COUNT/${MAX_WAIT}s)"
-    done
-    echo "IP $IPADDRESS is configured on br-$INTERFACE!"
-
-    # Add OpenFlow rules
-    echo "Adding flows to br-$INTERFACE..."
-
-    # INBOUND: ARP for our IP -> LOCAL
-    ovs-ofctl add-flow br-$INTERFACE "cookie=0x1,priority=100,arp,arp_tpa=$IPADDRESS,actions=LOCAL"
-    echo "  Added ARP flow for $IPADDRESS"
-
-    # INBOUND: IP traffic to our IP -> LOCAL
-    ovs-ofctl add-flow br-$INTERFACE "cookie=0x1,priority=100,ip,nw_dst=$IPADDRESS,actions=LOCAL"
-    echo "  Added IP flow for $IPADDRESS"
-
-    # DEFAULT: All other traffic -> normal L2 switching
-    ovs-ofctl add-flow br-$INTERFACE "cookie=0x1,priority=0,actions=NORMAL"
-    echo "  Added default NORMAL flow"
-
-    echo "Bridge br-$INTERFACE setup complete!"
-    echo ""
-  fi
-done </etc/spectrum-config-map
-
-# Wait for nmstate to finish all reconciliation before setting rp_filter
-# nmstate can reset rp_filter after interfaces are configured
-echo "Waiting 30s for nmstate to finish reconciliation..."
-sleep 30
-
-# Disable reverse path filtering on all rail interfaces
-# Required for cross-node traffic routed via ToR switch
-echo "Disabling rp_filter on all rail interfaces..."
-while IFS=':' read -r HOSTNAME INTERFACE IPADDRESS SUBNET GATEWAY TORIPADDRESS
-do
-  if [[ "$SYSTEM" == "$HOSTNAME" ]]
-  then
-    sysctl -w net.ipv4.conf.br-$INTERFACE.rp_filter=0
-    sysctl -w net.ipv4.conf.$INTERFACE.rp_filter=0
-  fi
-done </etc/spectrum-config-map
-
-# Enable IP forwarding for L3 routing between TOR-host and host-pod subnets
-echo "Enabling IP forwarding..."
-sysctl -w net.ipv4.ip_forward=1
-
-echo "Completed setting up all rail bridges and flows on $SYSTEM!"
-
-~~~
-
-Now that we have the example script we can base64 encode it and stash it into a variable.
-
-~~~bash
-$ BASE64_SCRIPT=$(cat spectrum-flows.sh | base64 -w 0)
-$ echo $BASE64_SCRIPT
-IyEvYmluL2Jhc2gKZWNobyAiR2F0aGVyaW5nIHRoZSBob3N0bmFtZS4uLiIgClNZU1RFTT1gaG9zdG5hbWVgCndoaWxlIElGUz0nOicgcmVhZCAtciBIT1NUTkFNRSBJTlRFUkZBQ0UgSVBBRERSRVNTIFNVQk5FVCBHQVRFV0FZIFRPUklQQUREUkVTUwpkbwogIGlmIFsiJFNZU1RFTSIgPT0gIiRIT1NUTkFNRSJdCiAgdGhlbgogICAgZWNobyAiQ3JlYXRpbmcgYnJpZGdlIG9uICRTWVNURU0gZm9yIGludGVyZmFjZSAkSU5URVJGQUNFIGFuZCBzZXR0aW5ncyB2YWx1ZXMuLi4iCiAgICBvdnMtdnNjdGwgLS1tYXktZXhpc3QgYWRkLWJyIGJyLSRJTlRFUkZBQ0UKICAgIG92cy12c2N0bCBzZXQgYnJpZGdlIGJyLSRJTlRFUkZBQ0UgZmFpbC1tb2RlPXNlY3VyZQogICAgb3ZzLXZzY3RsIHNldCBicmlkZ2UgYnItJElOVEVSRkFDRSBleHRlcm5hbC1pZHM6cmFpbF91cGxpbms9JElOVEVSRkFDRQogICAgb3ZzLXZzY3RsIHNldCBJbnRlcmZhY2UgYnItJElOVEVSRkFDRSBtdHVfcmVxdWVzdD05MjE2CiAgICBvdnMtdnNjdGwgYWRkLXBvcnQgYnItJElOVEVSRkFDRSAkSU5URVJGQUNFCiAgICBvdnMtdnNjdGwgc2V0IEludGVyZmFjZSAkSU5URVJGQUNFIG10dV9yZXF1ZXN0PTkyMTYKCiAgICBlY2hvICJTZXR0aW5nIG92cy1icmlkZ2UgZXh0ZXJuYWwtaWRzIHRvIHRvcl9pcCBmb3IgYnItJElOVEVSRkFDRS4uLiIKICAgICNvdnMtdnNjdGwgc2V0IGJyaWRnZSBici0kSU5URVJGQUNFIGV4dGVybmFsLWlkczpyYWlsX3BlZXJfaXA9JFRPUklQQUREUkVTUwogICAgZWNobyAib3ZzLXZzY3RsIHNldCBicmlkZ2UgYnItJElOVEVSRkFDRSBleHRlcm5hbC1pZHM6cmFpbF9wZWVyX2lwPSRUT1JJUEFERFJFU1MiCgogICAgZWNobyAiQWRkaW5nIGlwIGFkZHJlc3NlcyB0byBpbnRlcm5hbCBicmlkZ2UgYnItJElOVEVSRkFDRS4uLiIKICAgICNpcCBhZGRyIGFkZCAkSVBBRERSRVNTL1NVQk5FVCBkZXYgYnItJElOVEVSRkFDRQogICAgZWNobyAiaXAgYWRkciBhZGQgJElQQUREUkVTUy9TVUJORVQgZGV2IGJyLSRJTlRFUkZBQ0UiCiAgICAjaXAgYWRkciBhZGQgJEdBVEVXQVkgZGV2IGJyLSRJTlRFUkZBQ0UgICAgIyMjIyA8LS0tIENoZWNrIHdpdGggTlZJRElBIHRoaXMgY29tbWFuZCBzZWVtcyB3cm9uZwogICAgZWNobyAiaXAgYWRkciBhZGQgJEdBVEVXQVkgZGV2IGJyLSRJTlRFUkZBQ0UiIAoKICAgIGVjaG8gIkJyaW5naW5nIHVwIGJyLSRJTlRFUkZBQ0UgcG9ydC4uLiIKICAgICNpcCBsaW5rIHNldCBkZXYgYnItJElOVEVSRkFDRSB1cAogICAgZWNobyAiaXAgbGluayBzZXQgZGV2IGJyLSRJTlRFUkZBQ0UgdXAiCgogICAgZWNobyAiQWRkaW5nIHRoZSBmbG93cyB0byB0aGUgYnJpZGdlIGJyLSRJTlRFUkZBQ0UuLi4iCiAgICAjb3ZzLW9mY3RsIGFkZC1mbG93ICBici0kSU5URVJGQUNFICJjb29raWU9MHgxLCBhcnAsYXJwX3RwYT0kSVBBRERSRVNTIGFjdGlvbnM9TE9DQUwiCiAgICBlY2hvICJvdnMtb2ZjdGwgYWRkLWZsb3cgIGJyLSRJTlRFUkZBQ0UgImNvb2tpZT0weDEsIGFycCxhcnBfdHBhPSRJUEFERFJFU1MgYWN0aW9ucz1MT0NBTCIiCiAgICAjb3ZzLW9mY3RsIGFkZC1mbG93ICBici0kSU5URVJGQUNFICJjb29raWU9MHgxLCBhcnAsYXJwX3RwYT0kR0FURVdBWSBhY3Rpb25zPUxPQ0FMIgogICAgZWNobyAib3ZzLW9mY3RsIGFkZC1mbG93ICBici0kSU5URVJGQUNFICJjb29raWU9MHgxLCBhcnAsYXJwX3RwYT0kR0FURVdBWSBhY3Rpb25zPUxPQ0FMIiIKICAgICNvdnMtb2ZjdGwgYWRkLWZsb3cgIGJyLSRJTlRFUkZBQ0UgImNvb2tpZT0weDEsIGlwLG53X2RzdD0kSVBBRERSRVNTIGFjdGlvbnM9TE9DQUwiCiAgICBlY2hvICJvdnMtb2ZjdGwgYWRkLWZsb3cgIGJyLSRJTlRFUkZBQ0UgImNvb2tpZT0weDEsIGlwLG53X2RzdD0kSVBBRERSRVNTIGFjdGlvbnM9TE9DQUwiIgogICAgI292cy1vZmN0bCBhZGQtZmxvdyAgYnItJElOVEVSRkFDRSAiY29va2llPTB4MSwgaXAsbndfZHN0PSRHQVRFV0FZIGFjdGlvbnM9TE9DQUwiCiAgICBlY2hvICJvdnMtb2ZjdGwgYWRkLWZsb3cgIGJyLSRJTlRFUkZBQ0UgImNvb2tpZT0weDEsIGlwLG53X2RzdD0kR0FURVdBWSBhY3Rpb25zPUxPQ0FMIiIKICAgICNvdnMtb2ZjdGwgYWRkLWZsb3cgIGJyLSRJTlRFUkZBQ0UgImNvb2tpZT0weDEsIGFycCxhcnBfdHBhPSRUT1JJUEFERFJFU1MgYWN0aW9ucz1vdXRwdXQ6JElOVEVSRkFDRSIKICAgIGVjaG8gIm92cy1vZmN0bCBhZGQtZmxvdyAgYnItJElOVEVSRkFDRSAiY29va2llPTB4MSwgYXJwLGFycF90cGE9JFRPUklQQUREUkVTUyBhY3Rpb25zPW91dHB1dDokSU5URVJGQUNFIiIKICAgICNvdnMtb2ZjdGwgYWRkLWZsb3cgIGJyLSRJTlRFUkZBQ0UgImNvb2tpZT0weDEsIGlwLGluX3BvcnQ9TE9DQUwsbndfZHN0PSRUT1JJUEFERFJFU1MvOCBhY3Rpb25zPW91dHB1dDokSU5URVJGQUNFIgogICAgZWNobyAib3ZzLW9mY3RsIGFkZC1mbG93ICBici0kSU5URVJGQUNFICJjb29raWU9MHgxLCBpcCxpbl9wb3J0PUxPQ0FMLG53X2RzdD0kVE9SSVBBRERSRVNTLzggYWN0aW9ucz1vdXRwdXQ6JElOVEVSRkFDRSIiCiAgZmkKZG9uZSA8L2V0Yy9zcGVjdHJ1bS1jb25maWctbWFwCgplY2hvICJDb21wbGV0ZWQgc2V0dGluZyB1cCBhbGwgcmFpbCBicmlkZ2VzIGFuZCBmbG93cyBvbiAkU1lTVEVNISIK
-~~~
-
-Next we need to generate our config mapping.
-
-~~~bash
-$ cat <<EOF >spectrum-config-map 
-nvd-srv-36.nvidia.eng.rdu2.dc.redhat.com:eth_rail0:192.168.67.36:24:192.168.67.1:192.168.67.250
-nvd-srv-36.nvidia.eng.rdu2.dc.redhat.com:eth_rail1:192.168.67.37:24:192.168.67.1:192.168.67.250
-dell-h200-2:eth_rail0:172.31.2.35:31:172.31.2.34:172.31.2.34
-dell-h200-3:eth_rail0:172.31.2.13:31:172.31.2.12:172.31.2.12
-~~~
-
-We also need to base64 encode our config mapping.
-
-~~~bash
-$ BASE64_MAP=$(cat spectrum-config-map | base64 -w 0)
-$ echo $BASE64_MAP
-bnZkLXNydi0zNi5udmlkaWEuZW5nLnJkdTIuZGMucmVkaGF0LmNvbTpldGhfcmFpbDA6MTkyLjE2OC42Ny4zNjoyNDoxOTIuMTY4LjY3LjE6MTkyLjE2OC42Ny4yNTAKbnZkLXNydi0zNi5udmlkaWEuZW5nLnJkdTIuZGMucmVkaGF0LmNvbTpldGhfcmFpbDE6MTkyLjE2OC42Ny4zNzoyNDoxOTIuMTY4LjY3LjE6MTkyLjE2OC42Ny4yNTAK
-~~~
-
-We need now to create a NetworkManager Dispacher to set the kernel rp_filter to 0 ( without it when we add a node , we won't be able to ping or reply to ping )
-
-~~~bash
-$ cat <<'EOF' >spectrum-rp-filter-dispatcher.sh
-#!/bin/bash
-# NetworkManager dispatcher script to disable rp_filter on Spectrum-X interfaces
-# Triggered whenever an interface goes up/down
-IFACE="$1"
-ACTION="$2"
-
-if [[ "$ACTION" == "up" ]]; then
-    # Check if this is a Spectrum-X bridge or physical rail interface
-    case "$IFACE" in
-        br-eth_rail*|eth_rail*)
-            logger -t spectrum-rp-filter "Setting rp_filter=0 on $IFACE (triggered by NM dispatcher)"
-            sysctl -w net.ipv4.conf.${IFACE}.rp_filter=0 2>/dev/null
-            # Also set the counterpart (bridge<->physical)
-            if [[ "$IFACE" == br-* ]]; then
-                PHYS="${IFACE#br-}"
-                sysctl -w net.ipv4.conf.${PHYS}.rp_filter=0 2>/dev/null
-            else
-                sysctl -w net.ipv4.conf.br-${IFACE}.rp_filter=0 2>/dev/null
-            fi
-            ;;
-    esac
-fi
-EOF
-~~~
-
-Now lets change the permissions on the dispacher script.
-
-~~~bash
-$ chmod +x spectrum-rp-filter-dispatcher.sh
-~~~
-
-We also need to base64 encode our dispacher script.
-
-~~~bash
-$ BASE64_DISPATCHER=$(base64 -w0 spectrum-rp-filter-dispatcher.sh)
-$ echo $BASE64_DISPATCHER 
-IyEvYmluL2Jhc2gKIyBOZXR3b3JrTWFuYWdlciBkaXNwYXRjaGVyIHNjcmlwdCB0byBkaXNhYmxlIHJwX2ZpbHRlciBvbiBTcGVjdHJ1bS1YIGludGVyZmFjZXMKIyBUcmlnZ2VyZWQgd2hlbmV2ZXIgYW4gaW50ZXJmYWNlIGdvZXMgdXAvZG93bgpJRkFDRT0iJDEiCkFDVElPTj0iJDIiCgppZiBbWyAiJEFDVElPTiIgPT0gInVwIiBdXTsgdGhlbgogICAgIyBDaGVjayBpZiB0aGlzIGlzIGEgU3BlY3RydW0tWCBicmlkZ2Ugb3IgcGh5c2ljYWwgcmFpbCBpbnRlcmZhY2UKICAgIGNhc2UgIiRJRkFDRSIgaW4KICAgICAgICBici1ldGhfcmFpbCp8ZXRoX3JhaWwqKQogICAgICAgICAgICBsb2dnZXIgLXQgc3BlY3RydW0tcnAtZmlsdGVyICJTZXR0aW5nIHJwX2ZpbHRlcj0wIG9uICRJRkFDRSAodHJpZ2dlcmVkIGJ5IE5NIGRpc3BhdGNoZXIpIgogICAgICAgICAgICBzeXNjdGwgLXcgbmV0LmlwdjQuY29uZi4ke0lGQUNFfS5ycF9maWx0ZXI9MCAyPi9kZXYvbnVsbAogICAgICAgICAgICAjIEFsc28gc2V0IHRoZSBjb3VudGVycGFydCAoYnJpZGdlPC0+cGh5c2ljYWwpCiAgICAgICAgICAgIGlmIFtbICIkSUZBQ0UiID09IGJyLSogXV07IHRoZW4KICAgICAgICAgICAgICAgIFBIWVM9IiR7SUZBQ0UjYnItfSIKICAgICAgICAgICAgICAgIHN5c2N0bCAtdyBuZXQuaXB2NC5jb25mLiR7UEhZU30ucnBfZmlsdGVyPTAgMj4vZGV2L251bGwKICAgICAgICAgICAgZWxzZQogICAgICAgICAgICAgICAgc3lzY3RsIC13IG5ldC5pcHY0LmNvbmYuYnItJHtJRkFDRX0ucnBfZmlsdGVyPTAgMj4vZGV2L251bGwKICAgICAgICAgICAgZmkKICAgICAgICAgICAgOzsKICAgIGVzYWMKZmkK
-~~~
-
-Now we need to take our script and our mapping file and embed the base64 encoding into a machine configuration that will run the script as a systemd service.  Beside initially running the script the systemd service will also restart anytime the openvswitch service is restarted or if the box is rebooted which ensures the flows are always set.
-
-~~~bash
-$ cat > spectrum-flows-machineconfig.yaml << EOF
-kind: MachineConfig
-apiVersion: machineconfiguration.openshift.io/v1
-metadata:
-  name: worker-spectrum-br-flow-systemd-service
-  labels:
-    machineconfiguration.openshift.io/role: worker
-spec:
-  config:
-    ignition:
-      version: 3.2.0
-    systemd:
-      units:
-      - name: spectrum-br-flows.service
-        enabled: true
-        contents: |
-          [Unit]
-          Description=Adds the bridges and flows for Spectrum-X after network is online
-          After=NetworkManager-wait-online.service openvswitch.service
-          Wants=NetworkManager-wait-online.service
-          [Service]
-          RemainAfterExit=yes
-          ExecStart=/etc/scripts/spectrum-br-flows.sh
-          Type=oneshot
-          [Install]
-          WantedBy=multi-user.target
-      - name: spectrum-br-flows-watcher.path
-        enabled: true
-        contents: |
-          [Unit]
-          Description=Watch for NetworkManager connection changes to reapply OVS flows
-          [Path]
-          PathChanged=/etc/NetworkManager/system-connections
-          Unit=spectrum-br-flows-watcher.service
-          [Install]
-          WantedBy=multi-user.target
-      - name: spectrum-br-flows-watcher.service
-        enabled: false
-        contents: |
-          [Unit]
-          Description=Reapply OVS flows after NetworkManager connection changes
-          After=NetworkManager.service openvswitch.service
-          [Service]
-          Type=oneshot
-          ExecStartPre=/bin/sleep 5
-          ExecStart=/etc/scripts/spectrum-br-flows.sh
-    storage:
-      files:
-      - filesystem: root
-        path: "/etc/scripts/spectrum-br-flows.sh"
-        contents:
-          source: data:text/plain;charset=utf-8;base64,$BASE64_SCRIPT
-          verification: {}
-        mode: 0755
-        overwrite: true
-      - filesystem: root
-        path: "/etc/spectrum-config-map"
-        contents:
-          source: data:text/plain;charset=utf-8;base64,$BASE64_MAP
-          verification: {}
-        mode: 0644
-        overwrite: true
-      - filesystem: root
-        path: "/etc/NetworkManager/dispatcher.d/99-spectrum-rp-filter"
-        contents:
-          source: data:text/plain;charset=utf-8;base64,$BASE64_DISPATCHER
-          verification: {}
-        mode: 0755
-        overwrite: true
-      - filesystem: root
-        path: "/etc/sysctl.d/99-spectrum-rp-filter.conf"
-        contents:
-          source: data:text/plain;charset=utf-8;base64,$(echo -e "# Disable rp_filter for Spectrum-X cross-node traffic\nnet.ipv4.conf.default.rp_filter=0\nnet.ipv4.conf.all.rp_filter=0" | base64 -w0)
-          verification: {}
-        mode: 0644
-        overwrite: true
-EOF
-~~~
-
-Apply the machineconfig to the cluster to install the service.
-
-~~~bash
-$ oc create -f spectrum-flows-machineconfig.yaml
-machineconfig.machineconfiguration.openshift.io/worker-spectrum-br-flow-systemd-service created
-~~~
-
-~~~bash
-$ oc get mcp
-NAME     CONFIG                                             UPDATED   UPDATING   DEGRADED   MACHINECOUNT   READYMACHINECOUNT   UPDATEDMACHINECOUNT   DEGRADEDMACHINECOUNT   AGE
-master   rendered-master-c619e7c9fe8956e4444d2afc6e846411   False     True       False      1              0                   0                     0                      9d
-worker   rendered-worker-54885d6142f5d2cfb949378a4e7e9241   True      False      False      0              0                   0                     0                      9d
-~~~
-
-Once the `oc mcp` command comes back update we can validate the machine configuration applied appropriately with the following check in a debug pod on the node.
-
-~~~bash
-$ oc debug node/nvd-srv-36.nvidia.eng.rdu2.dc.redhat.com
-Starting pod/nvd-srv-36nvidiaengrdu2dcredhatcom-debug-lwdgf ...
-To use host binaries, run `chroot /host`. Instead, if you need to access host namespaces, run `nsenter -a -t 1`.
-Pod IP: 10.6.135.15
-If you don't see a command prompt, try pressing enter.
-sh-5.1# chroot /host
-sh-5.1# systemctl status spectrum-br-flows.service
-● spectrum-br-flows.service - Adds the bridges and flows for Spectrum-X whenever openvswitch is started or reloaded
-     Loaded: loaded (/etc/systemd/system/spectrum-br-flows.service; enabled; preset: disabled)
-     Active: active (exited) since Sun 2025-11-02 17:24:14 UTC; 10min ago
-   Main PID: 2316 (code=exited, status=0/SUCCESS)
-        CPU: 49ms
-
-Nov 02 17:24:14 nvd-srv-36.nvidia.eng.rdu2.dc.redhat.com spectrum-br-flows.sh[2316]: ip link set dev br-eth_rail1 up
-Nov 02 17:24:14 nvd-srv-36.nvidia.eng.rdu2.dc.redhat.com spectrum-br-flows.sh[2316]: Adding the flows to the bridge br-eth_rail1...
-Nov 02 17:24:14 nvd-srv-36.nvidia.eng.rdu2.dc.redhat.com spectrum-br-flows.sh[2316]: ovs-ofctl add-flow  br-eth_rail1 cookie=0x1, arp,arp_tpa=192.168.67.37 actions=LOCAL
-Nov 02 17:24:14 nvd-srv-36.nvidia.eng.rdu2.dc.redhat.com spectrum-br-flows.sh[2316]: ovs-ofctl add-flow  br-eth_rail1 cookie=0x1, arp,arp_tpa=192.168.67.1 actions=LOCAL
-Nov 02 17:24:14 nvd-srv-36.nvidia.eng.rdu2.dc.redhat.com spectrum-br-flows.sh[2316]: ovs-ofctl add-flow  br-eth_rail1 cookie=0x1, ip,nw_dst=192.168.67.37 actions=LOCAL
-Nov 02 17:24:14 nvd-srv-36.nvidia.eng.rdu2.dc.redhat.com spectrum-br-flows.sh[2316]: ovs-ofctl add-flow  br-eth_rail1 cookie=0x1, ip,nw_dst=192.168.67.1 actions=LOCAL
-Nov 02 17:24:14 nvd-srv-36.nvidia.eng.rdu2.dc.redhat.com spectrum-br-flows.sh[2316]: ovs-ofctl add-flow  br-eth_rail1 cookie=0x1, arp,arp_tpa=192.168.67.250 actions=output:eth_rail1
-Nov 02 17:24:14 nvd-srv-36.nvidia.eng.rdu2.dc.redhat.com spectrum-br-flows.sh[2316]: ovs-ofctl add-flow  br-eth_rail1 cookie=0x1, ip,in_port=LOCAL,nw_dst=192.168.67.250/8 actions=output:eth_rail1
-Nov 02 17:24:14 nvd-srv-36.nvidia.eng.rdu2.dc.redhat.com spectrum-br-flows.sh[2316]: Completed setting up all rail bridges and flows on nvd-srv-36.nvidia.eng.rdu2.dc.redhat.com!
-Nov 02 17:24:14 nvd-srv-36.nvidia.eng.rdu2.dc.redhat.com systemd[1]: Finished Adds the bridges and flows for Spectrum-X whenever openvswitch is started or reloaded.
-~~~
-
-~~~bash
-[root@nvd-srv-30 core]# journalctl |grep spectrum-br-flows.sh
-Nov 02 17:24:14 nvd-srv-36.nvidia.eng.rdu2.dc.redhat.com spectrum-br-flows.sh[2316]: Gathering the hostname...
-Nov 02 17:24:14 nvd-srv-36.nvidia.eng.rdu2.dc.redhat.com spectrum-br-flows.sh[2316]: Creating bridge on nvd-srv-36.nvidia.eng.rdu2.dc.redhat.com for interface eth_rail0 and settings values...
-Nov 02 17:24:14 nvd-srv-36.nvidia.eng.rdu2.dc.redhat.com spectrum-br-flows.sh[2316]: Setting ovs-bridge external-ids to tor_ip for br-eth_rail0...
-Nov 02 17:24:14 nvd-srv-36.nvidia.eng.rdu2.dc.redhat.com spectrum-br-flows.sh[2316]: ovs-vsctl set bridge br-eth_rail0 external-ids:rail_peer_ip=192.168.67.250
-Nov 02 17:24:14 nvd-srv-36.nvidia.eng.rdu2.dc.redhat.com spectrum-br-flows.sh[2316]: Adding ip addresses to internal bridge br-eth_rail0...
-Nov 02 17:24:14 nvd-srv-36.nvidia.eng.rdu2.dc.redhat.com spectrum-br-flows.sh[2316]: ip addr add 192.168.67.36/24 dev br-eth_rail0
-Nov 02 17:24:14 nvd-srv-36.nvidia.eng.rdu2.dc.redhat.com spectrum-br-flows.sh[2316]: ip addr add 192.168.67.1 dev br-eth_rail0
-Nov 02 17:24:14 nvd-srv-36.nvidia.eng.rdu2.dc.redhat.com spectrum-br-flows.sh[2316]: Bringing up br-eth_rail0 port...
-Nov 02 17:24:14 nvd-srv-36.nvidia.eng.rdu2.dc.redhat.com spectrum-br-flows.sh[2316]: ip link set dev br-eth_rail0 up
-Nov 02 17:24:14 nvd-srv-36.nvidia.eng.rdu2.dc.redhat.com spectrum-br-flows.sh[2316]: Adding the flows to the bridge br-eth_rail0...
-Nov 02 17:24:14 nvd-srv-36.nvidia.eng.rdu2.dc.redhat.com spectrum-br-flows.sh[2316]: ovs-ofctl add-flow  br-eth_rail0 cookie=0x1, arp,arp_tpa=192.168.67.36 actions=LOCAL
-Nov 02 17:24:14 nvd-srv-36.nvidia.eng.rdu2.dc.redhat.com spectrum-br-flows.sh[2316]: ovs-ofctl add-flow  br-eth_rail0 cookie=0x1, arp,arp_tpa=192.168.67.1 actions=LOCAL
-Nov 02 17:24:14 nvd-srv-36.nvidia.eng.rdu2.dc.redhat.com spectrum-br-flows.sh[2316]: ovs-ofctl add-flow  br-eth_rail0 cookie=0x1, ip,nw_dst=192.168.67.36 actions=LOCAL
-Nov 02 17:24:14 nvd-srv-36.nvidia.eng.rdu2.dc.redhat.com spectrum-br-flows.sh[2316]: ovs-ofctl add-flow  br-eth_rail0 cookie=0x1, ip,nw_dst=192.168.67.1 actions=LOCAL
-Nov 02 17:24:14 nvd-srv-36.nvidia.eng.rdu2.dc.redhat.com spectrum-br-flows.sh[2316]: ovs-ofctl add-flow  br-eth_rail0 cookie=0x1, arp,arp_tpa=192.168.67.250 actions=output:eth_rail0
-Nov 02 17:24:14 nvd-srv-36.nvidia.eng.rdu2.dc.redhat.com spectrum-br-flows.sh[2316]: ovs-ofctl add-flow  br-eth_rail0 cookie=0x1, ip,in_port=LOCAL,nw_dst=192.168.67.250/24 actions=output:eth_rail0
-Nov 02 17:24:14 nvd-srv-36.nvidia.eng.rdu2.dc.redhat.com spectrum-br-flows.sh[2316]: Creating bridge on nvd-srv-36.nvidia.eng.rdu2.dc.redhat.com for interface eth_rail1 and settings values...
-Nov 02 17:24:14 nvd-srv-36.nvidia.eng.rdu2.dc.redhat.com spectrum-br-flows.sh[2316]: Setting ovs-bridge external-ids to tor_ip for br-eth_rail1...
-Nov 02 17:24:14 nvd-srv-36.nvidia.eng.rdu2.dc.redhat.com spectrum-br-flows.sh[2316]: ovs-vsctl set bridge br-eth_rail1 external-ids:rail_peer_ip=192.168.67.250
-Nov 02 17:24:14 nvd-srv-36.nvidia.eng.rdu2.dc.redhat.com spectrum-br-flows.sh[2316]: Adding ip addresses to internal bridge br-eth_rail1...
-Nov 02 17:24:14 nvd-srv-36.nvidia.eng.rdu2.dc.redhat.com spectrum-br-flows.sh[2316]: ip addr add 192.168.67.37/24 dev br-eth_rail1
-Nov 02 17:24:14 nvd-srv-36.nvidia.eng.rdu2.dc.redhat.com spectrum-br-flows.sh[2316]: ip addr add 192.168.67.1 dev br-eth_rail1
-Nov 02 17:24:14 nvd-srv-36.nvidia.eng.rdu2.dc.redhat.com spectrum-br-flows.sh[2316]: Bringing up br-eth_rail1 port...
-Nov 02 17:24:14 nvd-srv-36.nvidia.eng.rdu2.dc.redhat.com spectrum-br-flows.sh[2316]: ip link set dev br-eth_rail1 up
-Nov 02 17:24:14 nvd-srv-36.nvidia.eng.rdu2.dc.redhat.com spectrum-br-flows.sh[2316]: Adding the flows to the bridge br-eth_rail1...
-Nov 02 17:24:14 nvd-srv-36.nvidia.eng.rdu2.dc.redhat.com spectrum-br-flows.sh[2316]: ovs-ofctl add-flow  br-eth_rail1 cookie=0x1, arp,arp_tpa=192.168.67.37 actions=LOCAL
-Nov 02 17:24:14 nvd-srv-36.nvidia.eng.rdu2.dc.redhat.com spectrum-br-flows.sh[2316]: ovs-ofctl add-flow  br-eth_rail1 cookie=0x1, arp,arp_tpa=192.168.67.1 actions=LOCAL
-Nov 02 17:24:14 nvd-srv-36.nvidia.eng.rdu2.dc.redhat.com spectrum-br-flows.sh[2316]: ovs-ofctl add-flow  br-eth_rail1 cookie=0x1, ip,nw_dst=192.168.67.37 actions=LOCAL
-Nov 02 17:24:14 nvd-srv-36.nvidia.eng.rdu2.dc.redhat.com spectrum-br-flows.sh[2316]: ovs-ofctl add-flow  br-eth_rail1 cookie=0x1, ip,nw_dst=192.168.67.1 actions=LOCAL
-Nov 02 17:24:14 nvd-srv-36.nvidia.eng.rdu2.dc.redhat.com spectrum-br-flows.sh[2316]: ovs-ofctl add-flow  br-eth_rail1 cookie=0x1, arp,arp_tpa=192.168.67.250 actions=output:eth_rail1
-Nov 02 17:24:14 nvd-srv-36.nvidia.eng.rdu2.dc.redhat.com spectrum-br-flows.sh[2316]: ovs-ofctl add-flow  br-eth_rail1 cookie=0x1, ip,in_port=LOCAL,nw_dst=192.168.67.250/24 actions=output:eth_rail1
-Nov 02 17:24:14 nvd-srv-36.nvidia.eng.rdu2.dc.redhat.com spectrum-br-flows.sh[2316]: Completed setting up all rail bridges and flows on nvd-srv-36.nvidia.eng.rdu2.dc.redhat.com!
-~~~
 
 ## Configure Spectrum-X CNI
 
@@ -1606,25 +1048,27 @@ The next thing we need to configure is the Spectrum-X CNI.  This is composed of 
 The nv-ipam CIDRPool looks similar to the following example.  Please adjust the ipaddressing and nodeName information to match the environment and create one for each rail interface.
 
 ~~~bash
+$ cat <<EOF > cidrpool_rail0.yaml
 apiVersion: nv-ipam.nvidia.com/v1alpha1
 kind: CIDRPool
 metadata:
-  name: rail-1
+  name: eth-rail0
   namespace: nvidia-network-operator
 spec:
-  cidr: 192.168.16.0/24
+  cidr: 172.16.0.0/15
   gatewayIndex: 0
   perNodeNetworkPrefix: 31
   routes:
-  - dst: 192.168.16.0/24
-  - dst: 192.168.16.0/20
+  - dst: 172.16.0.0/15
+  - dst: 172.16.0.0/12
   staticAllocations:
-  - gateway: 192.168.16.31
-    nodeName: dgx-hera-15
-    prefix: 192.168.16.30/31
-  - gateway: 192.168.16.33
-    nodeName: dgx-hera-16
-    prefix: 192.168.16.32/31
+  - gateway: 172.16.0.5
+    nodeName: dell-h200-2
+    prefix: 172.16.0.4/31
+  - gateway: 172.16.0.7
+    nodeName: dell-h200-3
+    prefix: 172.16.0.6/31
+EOF
 ~~~
 
 The OVSNetwork custom resource file looks similar to the following example.   Each rail will require a OVSNetwork configuration.
