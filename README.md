@@ -1077,22 +1077,21 @@ The OVSNetwork custom resource file looks similar to the following example.   Ea
 apiVersion: sriovnetwork.openshift.io/v1
 kind: OVSNetwork
 metadata:
-  name: rail-1
-  namespace: nvidia-network-operator
+  name: eth-rail0
+  namespace: openshift-sriov-network-operator
 spec:
-  resourceName: rail-1
-  networkNamespace: default
-  mtu: 9216
   ipam: |
     {
       "type": "nv-ipam",
-      "poolName": "rail-1",
+      "poolName": "eth-rail0",
       "poolType": "cidrpool"
     }
   metaPlugins: |
     {
-      "type": "rail"
+      "type": "rdma"
     }
+  networkNamespace: default
+  resourceName: eth_rail0
 ~~~
 
 ## Validate Spectrum-X Topology
