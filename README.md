@@ -21,6 +21,7 @@
 - [Configure MTU](#configure-MTU)
 - [Configure Spectrum-X CNI](#configure-spectrum-x-CNI)
 - [Validate Spectrum-X Topology](#validate-spectrum-x-topology)
+- [Performance Testing and Troubleshooting](#performance-testing-and-troubleshooting)
 
 
 ## Environment
@@ -1123,84 +1124,694 @@ To initiate ping checks in the topology we can use the following rcp-tool comman
 rcp-tool validation ping
 ~~~
 
-If all of the rcp-tool validations check out we can move onto running the final test which is an NCCL test job.   The following custom resource yaml provides an MPI job that can be run from two workers.
+If all of the rcp-tool validations check out we can move onto performance testing.
 
-Note: This file needs to be checked.
+## Performance Testing and Troubleshooting
+
+In this section we are going to set up the cluster to run a performance NCCL job.   This job will run in two pods across two worker nodes and use the NVIDIA Tooling image.   We will setup the required privileges, create the workload pod, validate connectivity between the two hosts on the infinband fabric and then run a performance test.
+
+First let's generate a service account CRD to use in the `default` namespace.
+
 ~~~bash
-apiVersion: kubeflow.org/v2beta1
-kind: MPIJob
+$ cat <<EOF > default-serviceaccount.yaml 
+apiVersion: v1
+kind: ServiceAccount
 metadata:
-  name: nccl-allreduce-graph-full-scale
-spec:
-  slotsPerWorker: 1
-  runPolicy:
-    cleanPodPolicy: Running
-  mpiReplicaSpecs:
-    Launcher:
-      replicas: 1
-      template:
-          spec:
-            containers:
-            - image: docker.io/deepops/nccl-tests:2312
-              name: nccl-test
-              command: ["/bin/bash", "-c"]
-              args: ["mpirun --allow-run-as-root \
-                    -c 2 \
-                    -bind-to none -map-by slot \
-                    -x NCCL_IB_GID_INDEX=3 \
-                    -x NCCL_IB_TC=96 \
-                    -x NCCL_IB_HCA=mlx5_ \
-                    -x NCCL_IB_ADAPTIVE_ROUTING=1 \
-                    -x NCCL_IB_SPLIT_DATA_ON_QPS=0 \
-                    -x NCCL_IBEXT_DISABLE=0 \
-                    -x UCX_IB_GID_INDEX=3 \
-                    -x UCX_TLS=cuda_copy,rc \
-                    -x UCC_CLS=basic \
-                    -x UCC_TLS=ucp \
-                    -x UCC_TL_NCCL_TUNE=0 \
-                    -x UCC_TL_UCP_TUNE=allgather:@0 \
-                    -x GLOO_SOCKET_IFNAME=eth0 \
-                    -x HYDRA_FULL_ERROR=1 \
-                    -x NCCL_DEBUG=warn \
-                    -x NCCL_IB_QPS_PER_CONNECTION=2 \
-                    -x NCCL_P2P_NET_CHUNKSIZE=524288 \
-                    -x NCCL_SOCKET_IFNAME=eth0 \
-                    -x NCCL_MIN_NCHANNELS=32 \
-                    -mca btl tcp,self \
-                    -mca btl_tcp_if_include eth0 \
-                    all_reduce_perf_mpi --ngpus 8 \
-                    --minbytes 1k --maxbytes 16G --stepfactor 2 \
-                    --stepbytes 1M --op sum --datatype float --root 0 \
-                    --iters 100 --warmup_iters 50 \
-                     --agg_iters 1 --average 1 --parallel_init 0 --check 1 --blocking 0 --cudagraph 0
-                    "]
-    Worker:
-      replicas: 2
-      template:
-        metadata:
-          annotations:
-            k8s.v1.cni.cncf.io/networks: rail-1,rail-2,rail-3,rail-4,rail-5,rail-6,rail-7,rail-8
-        spec:
-          containers:
-          - image: docker.io/deepops/nccl-tests:2312
-            name: nccltest
-            imagePullPolicy: IfNotPresent
-            securityContext:
-              capabilities:
-                add: ["IPC_LOCK"]
-            resources:
-              requests: &resources
-                nvidia.com/rail-1: "1"
-                nvidia.com/rail-2: "1"
-                nvidia.com/rail-3: "1"
-                nvidia.com/rail-4: "1"
-                nvidia.com/rail-5: "1"
-                nvidia.com/rail-6: "1"
-                nvidia.com/rail-7: "1"
-                nvidia.com/rail-8: "1"
-                nvidia.com/gpu: 8
-              limits:
-                <<: *resources
+  name: rdma
+  namespace: default
+EOF
 ~~~
+
+Next we can create it on our cluster.
+
+~~~bash
+$ oc create -f default-serviceaccount.yaml 
+serviceaccount/rdma created
+~~~
+
+Finally with the service account create we can add privleges to it.
+
+~~~bash
+$ oc -n default adm policy add-scc-to-user privileged -z rdma
+clusterrole.rbac.authorization.k8s.io/system:openshift:scc:privileged added: "rdma"
+~~~
+
+With the service account setup we now need to create a workload pod that contains all the tooling for our testing.  We can generate a custom pod CRD as follows to meet that requirement.
+
+~~~bash
+$ cat <<EOF > nvidiatools-dell-h200-3-workload.yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nvidiatools-dell-h200-3-workload
+  namespace: default
+  annotations:
+    k8s.v1.cni.cncf.io/networks: eth-rail0, eth-rail1, eth-rail2, eth-rail3, eth-rail4, eth-rail5, eth-rail6, eth-rail7
+spec:
+  serviceAccountName: rdma
+  nodeSelector:
+    kubernetes.io/hostname: dell-h200-3
+  volumes:
+    - name: shmem
+      emptyDir: {
+          medium: 'Memory',
+          sizeLimit: '16Gi'
+      }
+  containers:
+    - name: nvidiatools-dell-h200-3-workload
+      image: quay.io/redhat_emp1/ecosys-nvidia/nvidia-tools:0.2.2
+      imagePullPolicy: IfNotPresent
+      securityContext:
+        privileged: true
+        capabilities:
+          add: ["IPC_LOCK"]
+      resources:
+        limits:
+          nvidia.com/gpu: 8
+          openshift.io/eth_rail0: "1"
+          openshift.io/eth_rail1: "1"
+          openshift.io/eth_rail2: "1"
+          openshift.io/eth_rail3: "1"
+          openshift.io/eth_rail4: "1"
+          openshift.io/eth_rail5: "1"
+          openshift.io/eth_rail6: "1"
+          openshift.io/eth_rail7: "1"
+        requests:
+          nvidia.com/gpu: 8
+          openshift.io/eth_rail0: "1"
+          openshift.io/eth_rail1: "1"
+          openshift.io/eth_rail2: "1"
+          openshift.io/eth_rail3: "1"
+          openshift.io/eth_rail4: "1"
+          openshift.io/eth_rail5: "1"
+          openshift.io/eth_rail6: "1"
+          openshift.io/eth_rail7: "1"
+      volumeMounts:
+        - mountPath: /dev/shm
+          name: shmem
+EOF
+
+$ cat <<EOF > nvidiatools-dell-h200-2-workload.yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nvidiatools-dell-h200-2-workload
+  namespace: default
+  annotations:
+    k8s.v1.cni.cncf.io/networks: eth-rail0, eth-rail1, eth-rail2, eth-rail3, eth-rail4, eth-rail5, eth-rail6, eth-rail7
+spec:
+  serviceAccountName: rdma
+  nodeSelector:
+    kubernetes.io/hostname: dell-h200-2
+  volumes:
+    - name: shmem
+      emptyDir: {
+          medium: 'Memory',
+          sizeLimit: '16Gi'
+      }
+  containers:
+    - name: nvidiatools-dell-h200-2-workload
+      image: quay.io/redhat_emp1/ecosys-nvidia/nvidia-tools:0.2.2
+      imagePullPolicy: IfNotPresent
+      securityContext:
+        privileged: true
+        capabilities:
+          add: ["IPC_LOCK"]
+      resources:
+        limits:
+          nvidia.com/gpu: 8
+          openshift.io/eth_rail0: "1"
+          openshift.io/eth_rail1: "1"
+          openshift.io/eth_rail2: "1"
+          openshift.io/eth_rail3: "1"
+          openshift.io/eth_rail4: "1"
+          openshift.io/eth_rail5: "1"
+          openshift.io/eth_rail6: "1"
+          openshift.io/eth_rail7: "1"
+        requests:
+          nvidia.com/gpu: 8
+          openshift.io/eth_rail0: "1"
+          openshift.io/eth_rail1: "1"
+          openshift.io/eth_rail2: "1"
+          openshift.io/eth_rail3: "1"
+          openshift.io/eth_rail4: "1"
+          openshift.io/eth_rail5: "1"
+          openshift.io/eth_rail6: "1"
+          openshift.io/eth_rail7: "1"
+      volumeMounts:
+        - mountPath: /dev/shm
+          name: shmem
+EOF
+~~~
+
+Then we can create the pods on the cluster.
+
+~~~bash
+$ oc create -f nvidiatools-dell-h200-3-workload.yaml
+pod/nvidiatools-dell-h200-3-workload created
+
+$ oc create -f nvidiatools-dell-h200-2-workload.yaml
+pod/nvidiatools-dell-h200-2-workload created
+~~~
+
+Let's validate the pods is running.
+
+~~~bash
+$ oc get pods
+NAME                               READY   STATUS    RESTARTS   AGE
+nvidiatools-dell-h200-2-workload   1/1     Running   0          9s
+nvidiatools-dell-h200-3-workload   1/1     Running   0          18s
+~~~
+
+Now open two terminals and rsh into each of the pods.  We need to grab the ip addresses to populate the `mpirun` command with the ip addresses of the pods.
+
+~~~bash
+$ oc rsh nvidiatools-dell-h200-3-workload
+sh-5.1# source ./.bashrc
+[root@nvidiatools-dell-h200-3-workload ~]#
+
+$ oc rsh nvidiatools-dell-h200-2-workload
+sh-5.1# source ./.bashrc
+[root@nvidiatools-dell-h200-2-workload ~]#
+~~~
+
+We need to grab the ip addresses to populate the `mpirun` command with the ip addresses of the pods.
+
+~~~bash
+[root@nvidiatools-dell-h200-2-workload ~]# ip addr show eth0 | grep "inet\b" | awk '{print $2}' | cut -d/ -f1
+10.129.2.27
+
+[root@nvidiatools-dell-h200-3-workload ~]# ip addr show eth0 | grep "inet\b" | awk '{print $2}' | cut -d/ -f1
+10.128.2.44
+~~~
+
+Now let's run the following command (update the ip addresses based on the output from previous command) in one of the pods.  The command will use ssh on port 20024 to connect back to both the pod where the command is executed and the other pod on the remote worker.
+
+~~~bash
+mpirun --allow-run-as-root \
+-H 10.129.2.27:1,10.128.2.44:1 \
+-np 2 \
+-bind-to none -map-by slot \
+-x NCCL_IB_GID_INDEX=3 \
+-x NCCL_IB_TC=96 \
+-x NCCL_IB_HCA=mlx5_ \
+-x NCCL_IB_ADAPTIVE_ROUTING=1 \
+-x NCCL_IB_SPLIT_DATA_ON_QPS=0 \
+-x NCCL_IBEXT_DISABLE=0 \
+-x UCX_IB_GID_INDEX=3 \
+-x UCX_TLS=tcp \
+-x UCC_CLS=basic \
+-x UCC_TLS=ucp,self,sm \
+-x UCC_TL_NCCL_TUNE=0 \
+-x UCC_TL_UCP_TUNE=allgather:@0 \
+-x HYDRA_FULL_ERROR=1 \
+-x NCCL_DEBUG=warn \
+-x NCCL_IB_QPS_PER_CONNECTION=2 \
+-x NCCL_P2P_NET_CHUNKSIZE=524288 \
+-x NCCL_MIN_NCHANNELS=32 \
+-mca btl tcp,self \
+-mca btl_tcp_if_include net1,net2,net3,net4,net5,net6,net7,net8 \
+-mca plm_rsh_args "-p 20024" \
+all_reduce_perf --ngpus 8 \
+--minbytes 1k --maxbytes 16G --stepfactor 2 \
+--stepbytes 1M --op sum --datatype float --root 0 \
+--iters 100 --warmup_iters 50 \
+--agg_iters 1 --average 1 --parallel_init 0 --check 1 --blocking 0 --cudagraph 0
+~~~
+
+When the command is run above the following will be displayed on the terminal.  The busbw number is what we are interested in.
+
+~~~bash
+[root@nvidiatools-dell-h200-2-workload ~]# mpirun --allow-run-as-root \
+-H 10.129.2.27:1,10.128.2.44:1 \
+-np 2 \
+-bind-to none -map-by slot \
+-x NCCL_IB_GID_INDEX=3 \
+-x NCCL_IB_TC=96 \
+-x NCCL_IB_HCA=mlx5_ \
+-x NCCL_IB_ADAPTIVE_ROUTING=1 \
+-x NCCL_IB_SPLIT_DATA_ON_QPS=0 \
+-x NCCL_IBEXT_DISABLE=0 \
+-x UCX_IB_GID_INDEX=3 \
+-x UCX_TLS=tcp \
+-x UCC_CLS=basic \
+-x UCC_TLS=ucp,self,sm \
+-x UCC_TL_NCCL_TUNE=0 \
+-x UCC_TL_UCP_TUNE=allgather:@0 \
+-x HYDRA_FULL_ERROR=1 \
+-x NCCL_DEBUG=warn \
+-x NCCL_IB_QPS_PER_CONNECTION=2 \
+-x NCCL_P2P_NET_CHUNKSIZE=524288 \
+-x NCCL_MIN_NCHANNELS=32 \
+-mca btl tcp,self \
+-mca btl_tcp_if_include net1,net2,net3,net4,net5,net6,net7,net8 \
+-mca plm_rsh_args "-p 20024" \
+all_reduce_perf --ngpus 8 \
+--minbytes 1k --maxbytes 16G --stepfactor 2 \
+--stepbytes 1M --op sum --datatype float --root 0 \
+--iters 100 --warmup_iters 50 \
+--agg_iters 1 --average 1 --parallel_init 0 --check 1 --blocking 0 --cudagraph 0
+Warning: Permanently added '[10.128.2.44]:20024' (ED25519) to the list of known hosts.
+[1777406131.465474] [nvidiatools-dell-h200-2-workload:10204:0]          parser.c:2305 UCX  WARN  unused environment variable: UCX_IB_GID_INDEX
+[1777406131.465474] [nvidiatools-dell-h200-2-workload:10204:0]          parser.c:2305 UCX  WARN  (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1777406131.464522] [nvidiatools-dell-h200-3-workload:9750 :0]          parser.c:2305 UCX  WARN  unused environment variable: UCX_IB_GID_INDEX
+[1777406131.464522] [nvidiatools-dell-h200-3-workload:9750 :0]          parser.c:2305 UCX  WARN  (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+# nccl-tests version 2.18.3 nccl-headers=23004 nccl-library=23004
+# Collective test starting: all_reduce_perf
+# nThread 1 nGpus 8 minBytes 1024 maxBytes 17179869184 step: 2(factor) warmup iters: 50 iters: 100 agg iters: 1 validation: 1 graph: 0 unalign: 0
+#
+# Using devices
+#  Rank  0 Group  0 Pid  10204 on nvidiatools-dell-h200-2-workload device  0 [0000:1b:00] NVIDIA H200
+#  Rank  1 Group  0 Pid  10204 on nvidiatools-dell-h200-2-workload device  1 [0000:3c:00] NVIDIA H200
+#  Rank  2 Group  0 Pid  10204 on nvidiatools-dell-h200-2-workload device  2 [0000:4b:00] NVIDIA H200
+#  Rank  3 Group  0 Pid  10204 on nvidiatools-dell-h200-2-workload device  3 [0000:5c:00] NVIDIA H200
+#  Rank  4 Group  0 Pid  10204 on nvidiatools-dell-h200-2-workload device  4 [0000:9a:00] NVIDIA H200
+#  Rank  5 Group  0 Pid  10204 on nvidiatools-dell-h200-2-workload device  5 [0000:bb:00] NVIDIA H200
+#  Rank  6 Group  0 Pid  10204 on nvidiatools-dell-h200-2-workload device  6 [0000:cd:00] NVIDIA H200
+#  Rank  7 Group  0 Pid  10204 on nvidiatools-dell-h200-2-workload device  7 [0000:dc:00] NVIDIA H200
+#  Rank  8 Group  0 Pid   9750 on nvidiatools-dell-h200-3-workload device  0 [0000:1b:00] NVIDIA H200
+#  Rank  9 Group  0 Pid   9750 on nvidiatools-dell-h200-3-workload device  1 [0000:3c:00] NVIDIA H200
+#  Rank 10 Group  0 Pid   9750 on nvidiatools-dell-h200-3-workload device  2 [0000:4b:00] NVIDIA H200
+#  Rank 11 Group  0 Pid   9750 on nvidiatools-dell-h200-3-workload device  3 [0000:5c:00] NVIDIA H200
+#  Rank 12 Group  0 Pid   9750 on nvidiatools-dell-h200-3-workload device  4 [0000:9a:00] NVIDIA H200
+#  Rank 13 Group  0 Pid   9750 on nvidiatools-dell-h200-3-workload device  5 [0000:bb:00] NVIDIA H200
+#  Rank 14 Group  0 Pid   9750 on nvidiatools-dell-h200-3-workload device  6 [0000:cd:00] NVIDIA H200
+#  Rank 15 Group  0 Pid   9750 on nvidiatools-dell-h200-3-workload device  7 [0000:dc:00] NVIDIA H200
+NCCL version 2.30.4+cuda13.2
+#
+#                                                              out-of-place                       in-place          
+#       size         count      type   redop    root     time   algbw   busbw  #wrong     time   algbw   busbw  #wrong 
+#        (B)    (elements)                               (us)  (GB/s)  (GB/s)             (us)  (GB/s)  (GB/s)         
+        1024           256     float     sum      -1    45.06    0.02    0.04       0    43.74    0.02    0.04       0
+        2048           512     float     sum      -1    43.84    0.05    0.09       0    43.70    0.05    0.09       0
+        4096          1024     float     sum      -1    43.51    0.09    0.18       0    44.16    0.09    0.17       0
+        8192          2048     float     sum      -1    47.64    0.17    0.32       0    47.41    0.17    0.32       0
+       16384          4096     float     sum      -1    53.65    0.31    0.57       0    53.76    0.30    0.57       0
+       32768          8192     float     sum      -1    64.93    0.50    0.95       0    64.98    0.50    0.95       0
+       65536         16384     float     sum      -1    70.32    0.93    1.75       0    65.48    1.00    1.88       0
+      131072         32768     float     sum      -1    81.24    1.61    3.03       0    83.01    1.58    2.96       0
+      262144         65536     float     sum      -1    63.59    4.12    7.73       0    63.42    4.13    7.75       0
+      524288        131072     float     sum      -1    80.78    6.49   12.17       0    79.93    6.56   12.30       0
+     1048576        262144     float     sum      -1    76.86   13.64   25.58       0    77.16   13.59   25.48       0
+     2097152        524288     float     sum      -1    86.37   24.28   45.53       0    86.03   24.38   45.71       0
+     4194304       1048576     float     sum      -1   106.13   39.52   74.10       0   105.58   39.73   74.48       0
+     8388608       2097152     float     sum      -1   149.76   56.02  105.03       0   149.06   56.28  105.52       0
+    16777216       4194304     float     sum      -1   304.32   55.13  103.37       0   207.61   80.81  151.52       0
+    33554432       8388608     float     sum      -1   276.88  121.19  227.23       0   277.00  121.13  227.13       0
+    67108864      16777216     float     sum      -1   461.01  145.57  272.94       0   460.78  145.64  273.08       0
+   134217728      33554432     float     sum      -1   742.13  180.85  339.10       0   747.72  179.50  336.57       0
+   268435456      67108864     float     sum      -1  1275.21  210.50  394.69       0  1278.78  209.92  393.59       0
+   536870912     134217728     float     sum      -1  2327.12  230.70  432.57       0  2322.37  231.17  433.45       0
+  1073741824     268435456     float     sum      -1  4388.55  244.67  458.75       0  4385.35  244.85  459.09       0
+  2147483648     536870912     float     sum      -1  8497.37  252.72  473.86       0  8501.88  252.59  473.60       0
+  4294967296    1073741824     float     sum      -1  16715.2  256.95  481.78       0  16716.5  256.93  481.74       0
+  8589934592    2147483648     float     sum      -1  33169.3  258.97  485.57       0  33208.0  258.67  485.01       0
+ 17179869184    4294967296     float     sum      -1  66326.9  259.02  485.66       0  66345.5  258.95  485.52       0
+# Out of bounds values : 0 OK
+# Avg bus bandwidth    : 178.222 
+#
+# Collective test concluded: all_reduce_perf
+#
+~~~
+
+If everything checks out we should have a peek busbw over the actual line rate.  In our cluster the line rate is 400GB/s and from the results above we can see the last few iterations were above ~480G/s.   However if those numbers are lower for example below ~400GB/s then there are a few things we can check to ensure we have our setup configured correctly.
+
+First check that ATS_ENABLED is set to zero which implies disabled.
+
+~~~bash
+[root@nvidiatools-dell-h200-2-workload ~]# for device in `mst status -v|grep BlueField|awk {'print $3'}` ; do mlxconfig -d $device --yes q ATS_ENABLED; done
+
+Device #1:
+----------
+
+Device type:        BlueField3          
+Name:               900-9D3D4-00EN-HA0_Ax
+Description:        Nvidia BlueField-3 B3140H E-series HHHL SuperNIC; 400GbE (default mode) / NDR IB; Single-port QSFP112; PCIe Gen5.0 x16; 8 Arm cores; 16GB on board DDR; integrated BMC; Crypto Enabled
+Device:             cc:00.0             
+
+Configurations:                                          Next Boot
+        ATS_ENABLED                                 False(0)            
+
+Device #1:
+----------
+
+Device type:        BlueField3          
+Name:               900-9D3D4-00EN-HA0_Ax
+Description:        Nvidia BlueField-3 B3140H E-series HHHL SuperNIC; 400GbE (default mode) / NDR IB; Single-port QSFP112; PCIe Gen5.0 x16; 8 Arm cores; 16GB on board DDR; integrated BMC; Crypto Enabled
+Device:             ba:00.0             
+
+Configurations:                                          Next Boot
+        ATS_ENABLED                                 False(0)            
+
+Device #1:
+----------
+
+Device type:        BlueField3          
+Name:               900-9D3D4-00EN-HA0_Ax
+Description:        Nvidia BlueField-3 B3140H E-series HHHL SuperNIC; 400GbE (default mode) / NDR IB; Single-port QSFP112; PCIe Gen5.0 x16; 8 Arm cores; 16GB on board DDR; integrated BMC; Crypto Enabled
+Device:             3a:00.0             
+
+Configurations:                                          Next Boot
+        ATS_ENABLED                                 False(0)            
+
+Device #1:
+----------
+
+Device type:        BlueField3          
+Name:               900-9D3B6-00CV-A_Ax 
+Description:        NVIDIA BlueField-3 B3220 P-Series FHHL DPU; 200GbE (default mode) / NDR200 IB; Dual-port QSFP112; PCIe Gen5.0 x16 with x16 PCIe extension option; 16 Arm cores; 32GB on-board DDR; integrated BMC; Crypto Enabled
+Device:             bc:00.1             
+
+Configurations:                                          Next Boot
+        ATS_ENABLED                                 False(0)            
+
+Device #1:
+----------
+
+Device type:        BlueField3          
+Name:               900-9D3D4-00EN-HA0_Ax
+Description:        Nvidia BlueField-3 B3140H E-series HHHL SuperNIC; 400GbE (default mode) / NDR IB; Single-port QSFP112; PCIe Gen5.0 x16; 8 Arm cores; 16GB on board DDR; integrated BMC; Crypto Enabled
+Device:             5d:00.0             
+
+Configurations:                                          Next Boot
+        ATS_ENABLED                                 False(0)            
+
+Device #1:
+----------
+
+Device type:        BlueField3          
+Name:               900-9D3D4-00EN-HA0_Ax
+Description:        Nvidia BlueField-3 B3140H E-series HHHL SuperNIC; 400GbE (default mode) / NDR IB; Single-port QSFP112; PCIe Gen5.0 x16; 8 Arm cores; 16GB on board DDR; integrated BMC; Crypto Enabled
+Device:             ca:00.0             
+
+Configurations:                                          Next Boot
+        ATS_ENABLED                                 False(0)            
+
+Device #1:
+----------
+
+Device type:        BlueField3          
+Name:               900-9D3B6-00CV-A_Ax 
+Description:        NVIDIA BlueField-3 B3220 P-Series FHHL DPU; 200GbE (default mode) / NDR200 IB; Dual-port QSFP112; PCIe Gen5.0 x16 with x16 PCIe extension option; 16 Arm cores; 32GB on-board DDR; integrated BMC; Crypto Enabled
+Device:             5f:00.1             
+
+Configurations:                                          Next Boot
+        ATS_ENABLED                                 False(0)            
+
+Device #1:
+----------
+
+Device type:        BlueField3          
+Name:               900-9D3D4-00EN-HA0_Ax
+Description:        Nvidia BlueField-3 B3140H E-series HHHL SuperNIC; 400GbE (default mode) / NDR IB; Single-port QSFP112; PCIe Gen5.0 x16; 8 Arm cores; 16GB on board DDR; integrated BMC; Crypto Enabled
+Device:             db:00.0             
+
+Configurations:                                          Next Boot
+        ATS_ENABLED                                 False(0)            
+
+Device #1:
+----------
+
+Device type:        BlueField3          
+Name:               900-9D3D4-00EN-HA0_Ax
+Description:        Nvidia BlueField-3 B3140H E-series HHHL SuperNIC; 400GbE (default mode) / NDR IB; Single-port QSFP112; PCIe Gen5.0 x16; 8 Arm cores; 16GB on board DDR; integrated BMC; Crypto Enabled
+Device:             18:00.0             
+
+Configurations:                                          Next Boot
+        ATS_ENABLED                                 False(0)            
+
+Device #1:
+----------
+
+Device type:        BlueField3          
+Name:               900-9D3D4-00EN-HA0_Ax
+Description:        Nvidia BlueField-3 B3140H E-series HHHL SuperNIC; 400GbE (default mode) / NDR IB; Single-port QSFP112; PCIe Gen5.0 x16; 8 Arm cores; 16GB on board DDR; integrated BMC; Crypto Enabled
+Device:             1a:00.0             
+
+Configurations:                                          Next Boot
+        ATS_ENABLED                                 False(0)            
+
+Device #1:
+----------
+
+Device type:        BlueField3          
+Name:               900-9D3D4-00EN-HA0_Ax
+Description:        Nvidia BlueField-3 B3140H E-series HHHL SuperNIC; 400GbE (default mode) / NDR IB; Single-port QSFP112; PCIe Gen5.0 x16; 8 Arm cores; 16GB on board DDR; integrated BMC; Crypto Enabled
+Device:             9b:00.0             
+
+Configurations:                                          Next Boot
+        ATS_ENABLED                                 False(0)            
+
+Device #1:
+----------
+
+Device type:        BlueField3          
+Name:               900-9D3B6-00CV-A_Ax 
+Description:        NVIDIA BlueField-3 B3220 P-Series FHHL DPU; 200GbE (default mode) / NDR200 IB; Dual-port QSFP112; PCIe Gen5.0 x16 with x16 PCIe extension option; 16 Arm cores; 32GB on-board DDR; integrated BMC; Crypto Enabled
+Device:             bc:00.0             
+
+Configurations:                                          Next Boot
+        ATS_ENABLED                                 False(0)            
+
+Device #1:
+----------
+
+Device type:        BlueField3          
+Name:               900-9D3B6-00CV-A_Ax 
+Description:        NVIDIA BlueField-3 B3220 P-Series FHHL DPU; 200GbE (default mode) / NDR200 IB; Dual-port QSFP112; PCIe Gen5.0 x16 with x16 PCIe extension option; 16 Arm cores; 32GB on-board DDR; integrated BMC; Crypto Enabled
+Device:             5f:00.0             
+
+Configurations:                                          Next Boot
+        ATS_ENABLED                                 False(0)            
+
+Device #1:
+----------
+
+Device type:        BlueField3          
+Name:               900-9D3D4-00EN-HA0_Ax
+Description:        Nvidia BlueField-3 B3140H E-series HHHL SuperNIC; 400GbE (default mode) / NDR IB; Single-port QSFP112; PCIe Gen5.0 x16; 8 Arm cores; 16GB on board DDR; integrated BMC; Crypto Enabled
+Device:             4d:00.0             
+
+Configurations:                                          Next Boot
+        ATS_ENABLED                                 False(0)   
+~~~
+
+Next check that the interfaces have the MaxReadReq set to 4k.
+
+~~~bash
+[root@nvidiatools-dell-h200-2-workload ~]# lspci -vv -d 15b3:a2dc| grep -i MaxReadReq
+			MaxPayload 256 bytes, MaxReadReq 4096 bytes
+			MaxPayload 256 bytes, MaxReadReq 4096 bytes
+			MaxPayload 256 bytes, MaxReadReq 4096 bytes
+			MaxPayload 256 bytes, MaxReadReq 4096 bytes
+			MaxPayload 256 bytes, MaxReadReq 4096 bytes
+			MaxPayload 256 bytes, MaxReadReq 4096 bytes
+			MaxPayload 256 bytes, MaxReadReq 4096 bytes
+			MaxPayload 256 bytes, MaxReadReq 4096 bytes
+			MaxPayload 256 bytes, MaxReadReq 4096 bytes
+			MaxPayload 256 bytes, MaxReadReq 4096 bytes
+			MaxPayload 256 bytes, MaxReadReq 4096 bytes
+			MaxPayload 256 bytes, MaxReadReq 4096 bytes
+			MaxPayload 256 bytes, MaxReadReq 4096 bytes
+			MaxPayload 256 bytes, MaxReadReq 4096 bytes
+~~~
+
+Finally make sure that ACS is disabled.   We can check it by running the following command.
+
+~~~bash
+[root@nvidiatools-dell-h200-2-workload ~]# lspci -vv | grep -i "acsctl"
+		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
+		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
+		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
+		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
+		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
+		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
+		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
+		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
+		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
+		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
+		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
+		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
+		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
+		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
+		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
+		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
+		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
+		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
+		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
+		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
+		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
+		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
+		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
+		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
+		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
+		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
+		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
+		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
+		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
+		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
+		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
+		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
+		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
+		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
+		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
+		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
+		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
+		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
+		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
+		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
+		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
+		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
+		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
+		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
+		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
+		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
+		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
+		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
+		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
+		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
+		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
+		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
+		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
+		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
+		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
+		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
+		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
+		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
+		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
+		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
+		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
+		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
+		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
+		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
+		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
+		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
+		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
+		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
+		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
+		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
+		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
+		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
+		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
+		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
+		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
+		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
+~~~
+
+If any values have a `+` symbol next to the word then ACS might be enabled.  To disable permanently, at least on Dell systems go into the BIOS and disable virtualization.   As a temporary fix we can use the following script to disable ACS as well.
+
+~~~bash
+[root@nvidiatools-dell-h200-2-workload ~]# cat <<EOF > disable-acs.sh 
+#!/bin/bash
+# must be root to access extended PCI config space
+if [ "$EUID" -ne 0 ]; then
+  echo "ERROR: $0 must be run as root"
+  exit 1
+fi
+ 
+for BDF in `lspci -d "*:*:*" | awk '{print $1}'`; do
+ 
+    # skip if it doesn't support ACS
+    setpci -v -s ${BDF} ECAP_ACS+0x6.w > /dev/null 2>&1
+    if [ $? -ne 0 ]; then
+            echo "${BDF} does not support ACS, skipping"
+            continue
+    fi
+ 
+    echo "Disabling ACS on ${BDF}"
+    setpci -v -s ${BDF} ECAP_ACS+0x6.w=0000
+ 
+done
+exit 0
+EOF
+~~~
+
+Set the execute bit on the script and run it.  Note this needs to be done on all nodes.
+
+~~~bash
+[root@nvidiatools-dell-h200-2-workload ~]# chmod +x disable-acs.sh 
+[root@nvidiatools-dell-h200-2-workload ~]# ./disable-acs.sh |grep Disabling
+Disabling ACS on 00:0a.0
+Disabling ACS on 00:0c.0
+Disabling ACS on 00:0e.0
+Disabling ACS on 15:01.0
+Disabling ACS on 17:00.0
+Disabling ACS on 17:01.0
+Disabling ACS on 17:02.0
+Disabling ACS on 17:03.0
+Disabling ACS on 17:1f.0
+Disabling ACS on 18:00.0
+Disabling ACS on 18:00.1
+Disabling ACS on 1a:00.0
+Disabling ACS on 1a:00.1
+Disabling ACS on 37:01.0
+Disabling ACS on 39:00.0
+Disabling ACS on 39:01.0
+Disabling ACS on 39:02.0
+Disabling ACS on 3a:00.0
+Disabling ACS on 3a:00.1
+Disabling ACS on 48:01.0
+Disabling ACS on 4a:00.0
+Disabling ACS on 4a:01.0
+Disabling ACS on 4a:02.0
+Disabling ACS on 4d:00.0
+Disabling ACS on 4d:00.1
+Disabling ACS on 59:01.0
+Disabling ACS on 5b:00.0
+Disabling ACS on 5b:01.0
+Disabling ACS on 5b:02.0
+Disabling ACS on 5b:03.0
+Disabling ACS on 5b:1f.0
+Disabling ACS on 5d:00.0
+Disabling ACS on 5d:00.1
+Disabling ACS on 5f:00.0
+Disabling ACS on 5f:00.1
+Disabling ACS on 5f:00.2
+Disabling ACS on 80:01.0
+Disabling ACS on 81:00.0
+Disabling ACS on 81:00.1
+Disabling ACS on 82:00.0
+Disabling ACS on 82:01.0
+Disabling ACS on 82:02.0
+Disabling ACS on 82:03.0
+Disabling ACS on 97:01.0
+Disabling ACS on 99:00.0
+Disabling ACS on 99:01.0
+Disabling ACS on 99:02.0
+Disabling ACS on 99:1f.0
+Disabling ACS on 9b:00.0
+Disabling ACS on 9b:00.1
+Disabling ACS on b7:01.0
+Disabling ACS on b9:00.0
+Disabling ACS on b9:01.0
+Disabling ACS on b9:02.0
+Disabling ACS on b9:03.0
+Disabling ACS on ba:00.0
+Disabling ACS on ba:00.1
+Disabling ACS on bc:00.0
+Disabling ACS on bc:00.1
+Disabling ACS on bc:00.2
+Disabling ACS on c7:01.0
+Disabling ACS on c9:00.0
+Disabling ACS on c9:01.0
+Disabling ACS on c9:02.0
+Disabling ACS on c9:03.0
+Disabling ACS on c9:1f.0
+Disabling ACS on ca:00.0
+Disabling ACS on ca:00.1
+Disabling ACS on cc:00.0
+Disabling ACS on cc:00.1
+Disabling ACS on d7:01.0
+Disabling ACS on d9:00.0
+Disabling ACS on d9:01.0
+Disabling ACS on d9:02.0
+Disabling ACS on db:00.0
+Disabling ACS on db:00.1
+~~~
+
+After all of this rerun the NCCL job.  If it still does not have performance numbers expected go back and review the entire configuration.
+
+
+
 
 If everything works we should see near line speeds for the data transfer between GPU worker nodes.
