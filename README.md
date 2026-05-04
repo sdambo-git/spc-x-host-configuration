@@ -20,6 +20,7 @@
 - [Configure Physical Rail Interface Attributes](#configure-physical-rail-interface-attributes)
 - [Configure MTU](#configure-MTU)
 - [Configure Spectrum-X CNI](#configure-spectrum-x-CNI)
+- [Solve missing kernel modules in NIC Configuration Daemon](#Solve-missing-kernel-modules-in-NIC-Configuration-Daemon)
 - [Validate Spectrum-X Topology](#validate-spectrum-x-topology)
 
 
@@ -1093,6 +1094,67 @@ spec:
   networkNamespace: default
   resourceName: eth_rail0
 ~~~
+## Solve missing kernel modules in NIC Configuration Daemon 
+
+There is an issue that we can see in NIC Configuration Daemon logs, that fwctl.ko and mlx5_fwctl.ko modules arn't loaded on the worker nods in order for dms client commands to work ,In order to solve it we should load them using machine       config 
+
+~~~bash
+$ cat <<EOF > mc-load-fwctl.yaml
+apiVersion: machineconfiguration.openshift.io/v1
+kind: MachineConfig
+metadata:
+  name: 99-worker-load-fwctl
+  labels:
+    machineconfiguration.openshift.io/role: worker
+spec:
+  config:
+    ignition:
+      version: 3.2.0
+    systemd:
+      units:
+      - name: load-fwctl.service
+        enabled: false
+        contents: |
+          [Unit]
+          Description=Load fwctl kernel modules from MOFED container
+          After=crio.service kubelet.service
+
+          [Service]
+          Type=oneshot
+          RemainAfterExit=yes
+          Environment=CONTAINER_RUNTIME_ENDPOINT=unix:///run/crio/crio.sock
+          ExecStart=/bin/bash -c '\
+            if lsmod | grep -q mlx5_fwctl; then echo "fwctl already loaded"; exit 0; fi; \
+            CID=$$(crictl ps --name mofed-container --state running -q 2>/dev/null | head -1); \
+            if [ -z "$$CID" ]; then echo "MOFED container not found"; exit 1; fi; \
+            echo "Found MOFED container: $$CID"; \
+            KERN=$$(uname -r); \
+            MOD=/lib/modules/$${KERN}/extra/mlnx-ofa_kernel/drivers/fwctl; \
+            crictl exec $$CID insmod $${MOD}/fwctl.ko; \
+            crictl exec $$CID insmod $${MOD}/mlx5/mlx5_fwctl.ko; \
+            lsmod | grep -q mlx5_fwctl && echo "fwctl modules loaded successfully" || { echo "Failed to load fwctl"; exit 1; }'
+
+          [Install]
+          WantedBy=multi-user.target
+      - name: load-fwctl.timer
+        enabled: true
+        contents: |
+          [Unit]
+          Description=Timer to load fwctl kernel modules after MOFED is ready
+
+          [Timer]
+          OnBootSec=90s
+          OnUnitInactiveSec=60s
+
+          [Install]
+          WantedBy=timers.target
+EOF
+~~~
+Create the machine config on the cluster
+~~~bash
+$ oc create -f mc-load-fwctl.yaml
+~~~
+We can monitor the progress of setting the core user password MachineConfig using the `oc get mcp` command.
 
 ## Validate Spectrum-X Topology
 
