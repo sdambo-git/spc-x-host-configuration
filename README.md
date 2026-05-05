@@ -19,7 +19,8 @@
 - [Configuring OVS Offload](#configuring-ovs-offload)
 - [Configure Physical Rail Interface Attributes](#configure-physical-rail-interface-attributes)
 - [Configure MTU](#configure-MTU)
-- [Configure Spectrum-X CNI](#configure-spectrum-x-CNI) 
+- [Configure Spectrum-X CNI](#configure-spectrum-x-CNI)
+- [Solve missing kernel modules in NIC Configuration Daemon](#Solve-missing-kernel-modules-in-NIC-Configuration-Daemon)
 - [Validate Spectrum-X Topology](#validate-spectrum-x-topology)
 - [Performance Testing and Troubleshooting](#performance-testing-and-troubleshooting)
 
@@ -107,7 +108,7 @@ $ oc create -f 99-machineconfig-nvd-srv-36.yaml
 machineconfig.machineconfiguration.openshift.io/99-master-nvd-srv-36 created
 ~~~
 
-To validate this has been configured we can use `dmesg` output and `oc describe node` to see iommu and hughpages are set.
+To validate this has been configured we can use `dmesg` output and `oc describe node` to see iommu and hughpages are set or even better with `cat /proc/cmdline` in each node.
 
 ## Set RDMA Subsystem Namespace Awareness
 
@@ -153,26 +154,23 @@ We need to use udev rules to normalize the interface names on each node to eth_r
 ~~~bash
 $ cat <<EOF > 70-persistent-net.rules 
 ACTION=="add", KERNELS=="0000:18:00.0", SUBSYSTEM=="net", NAME="eth_rail0"
-ACTION=="add", KERNELS=="0000:1a:00.0", SUBSYSTEM=="net", NAME="eth_rail1"
-ACTION=="add", KERNELS=="0000:3a:00.0", SUBSYSTEM=="net", NAME="eth_rail2"
-ACTION=="add", KERNELS=="0000:4d:00.0", SUBSYSTEM=="net", NAME="eth_rail3"
-ACTION=="add", KERNELS=="0000:5d:00.0", SUBSYSTEM=="net", NAME="eth_rail4"
-ACTION=="add", KERNELS=="0000:9b:00.0", SUBSYSTEM=="net", NAME="eth_rail5"
-ACTION=="add", KERNELS=="0000:ba:00.0", SUBSYSTEM=="net", NAME="eth_rail6"
-ACTION=="add", KERNELS=="0000:ca:00.0", SUBSYSTEM=="net", NAME="eth_rail7"
-ACTION=="add", KERNELS=="0000:cc:00.0", SUBSYSTEM=="net", NAME="eth_rail8"
-ACTION=="add", KERNELS=="0000:db:00.0", SUBSYSTEM=="net", NAME="eth_rail9"
+ACTION=="add", KERNELS=="0000:3a:00.0", SUBSYSTEM=="net", NAME="eth_rail1"
+ACTION=="add", KERNELS=="0000:4d:00.0", SUBSYSTEM=="net", NAME="eth_rail2"
+ACTION=="add", KERNELS=="0000:5d:00.0", SUBSYSTEM=="net", NAME="eth_rail3"
+ACTION=="add", KERNELS=="0000:9b:00.0", SUBSYSTEM=="net", NAME="eth_rail4"
+ACTION=="add", KERNELS=="0000:ba:00.0", SUBSYSTEM=="net", NAME="eth_rail5"
+ACTION=="add", KERNELS=="0000:ca:00.0", SUBSYSTEM=="net", NAME="eth_rail6"
+ACTION=="add", KERNELS=="0000:db:00.0", SUBSYSTEM=="net", NAME="eth_rail7"
 
 ACTION=="add", KERNELS=="0000:18:00.0", SUBSYSTEM=="infiniband", PROGRAM="rdma_rename %k NAME_FIXED roce_rail0"
-ACTION=="add", KERNELS=="0000:1a:00.0", SUBSYSTEM=="infiniband", PROGRAM="rdma_rename %k NAME_FIXED roce_rail1"
-ACTION=="add", KERNELS=="0000:3a:00.0", SUBSYSTEM=="infiniband", PROGRAM="rdma_rename %k NAME_FIXED roce_rail2"
-ACTION=="add", KERNELS=="0000:4d:00.0", SUBSYSTEM=="infiniband", PROGRAM="rdma_rename %k NAME_FIXED roce_rail3"
-ACTION=="add", KERNELS=="0000:5d:00.0", SUBSYSTEM=="infiniband", PROGRAM="rdma_rename %k NAME_FIXED roce_rail4"
-ACTION=="add", KERNELS=="0000:9b:00.0", SUBSYSTEM=="infiniband", PROGRAM="rdma_rename %k NAME_FIXED roce_rail5"
-ACTION=="add", KERNELS=="0000:ba:00.0", SUBSYSTEM=="infiniband", PROGRAM="rdma_rename %k NAME_FIXED roce_rail6"
-ACTION=="add", KERNELS=="0000:ca:00.0", SUBSYSTEM=="infiniband", PROGRAM="rdma_rename %k NAME_FIXED roce_rail7"
-ACTION=="add", KERNELS=="0000:cc:00.0", SUBSYSTEM=="infiniband", PROGRAM="rdma_rename %k NAME_FIXED roce_rail8"
-ACTION=="add", KERNELS=="0000:db:00.0", SUBSYSTEM=="infiniband", PROGRAM="rdma_rename %k NAME_FIXED roce_rail9"
+ACTION=="add", KERNELS=="0000:3a:00.0", SUBSYSTEM=="infiniband", PROGRAM="rdma_rename %k NAME_FIXED roce_rail1"
+ACTION=="add", KERNELS=="0000:4d:00.0", SUBSYSTEM=="infiniband", PROGRAM="rdma_rename %k NAME_FIXED roce_rail2"
+ACTION=="add", KERNELS=="0000:5d:00.0", SUBSYSTEM=="infiniband", PROGRAM="rdma_rename %k NAME_FIXED roce_rail3"
+ACTION=="add", KERNELS=="0000:9b:00.0", SUBSYSTEM=="infiniband", PROGRAM="rdma_rename %k NAME_FIXED roce_rail4"
+ACTION=="add", KERNELS=="0000:ba:00.0", SUBSYSTEM=="infiniband", PROGRAM="rdma_rename %k NAME_FIXED roce_rail5"
+ACTION=="add", KERNELS=="0000:ca:00.0", SUBSYSTEM=="infiniband", PROGRAM="rdma_rename %k NAME_FIXED roce_rail6"
+ACTION=="add", KERNELS=="0000:db:00.0", SUBSYSTEM=="infiniband", PROGRAM="rdma_rename %k NAME_FIXED roce_rail7"
+
 EOF
 ~~~
 
@@ -322,7 +320,7 @@ sriov-network-operator-5995bb94f6-qbsgd   1/1     Running   0          18m
 Finally patch the sriovoperatorconfig to work with the NVIDIA Network Operator and DOCA/MOFED. Note if the nodes are workers instead of masters and workers switch to workers in node role.
 
 ~~~bash
-oc patch sriovoperatorconfig default --type=merge -n openshift-sriov-network-operator --patch '{ "spec": { "configDaemonNodeSelector": { "network.nvidia.com/operator.mofed.wait": "false", "node-role.kubernetes.io/master": "", "feature.node.kubernetes.io/pci-15b3.sriov.capable": "true" } } }'
+oc patch sriovoperatorconfig default --type=merge -n openshift-sriov-network-operator --patch '{ "spec": { "configDaemonNodeSelector": { "network.nvidia.com/operator.mofed.wait": "false", "node-role.kubernetes.io/worker": "", "feature.node.kubernetes.io/pci-15b3.sriov.capable": "true" } } }'
 ~~~
 
 ## Configuring NMState Operator
@@ -1078,23 +1076,83 @@ The OVSNetwork custom resource file looks similar to the following example.   Ea
 apiVersion: sriovnetwork.openshift.io/v1
 kind: OVSNetwork
 metadata:
-  name: rail-1
-  namespace: nvidia-network-operator
+  name: eth-rail0
+  namespace: openshift-sriov-network-operator
 spec:
-  resourceName: rail-1
-  networkNamespace: default
-  mtu: 9216
   ipam: |
     {
       "type": "nv-ipam",
-      "poolName": "rail-1",
+      "poolName": "eth-rail0",
       "poolType": "cidrpool"
     }
   metaPlugins: |
     {
-      "type": "rail"
+      "type": "rdma"
     }
+  networkNamespace: default
+  resourceName: eth_rail0
 ~~~
+## Solve missing kernel modules in NIC Configuration Daemon 
+
+There is an issue that we can see in NIC Configuration Daemon logs, that fwctl.ko and mlx5_fwctl.ko modules arn't loaded on the worker nods in order for dms client commands to work ,In order to solve it we should load them using machine       config 
+
+~~~bash
+$ cat <<EOF > mc-load-fwctl.yaml
+apiVersion: machineconfiguration.openshift.io/v1
+kind: MachineConfig
+metadata:
+  name: 99-worker-load-fwctl
+  labels:
+    machineconfiguration.openshift.io/role: worker
+spec:
+  config:
+    ignition:
+      version: 3.2.0
+    systemd:
+      units:
+      - name: load-fwctl.service
+        enabled: false
+        contents: |
+          [Unit]
+          Description=Load fwctl kernel modules from MOFED container
+          After=crio.service kubelet.service
+
+          [Service]
+          Type=oneshot
+          RemainAfterExit=yes
+          Environment=CONTAINER_RUNTIME_ENDPOINT=unix:///run/crio/crio.sock
+          ExecStart=/bin/bash -c '\
+            if lsmod | grep -q mlx5_fwctl; then echo "fwctl already loaded"; exit 0; fi; \
+            CID=$$(crictl ps --name mofed-container --state running -q 2>/dev/null | head -1); \
+            if [ -z "$$CID" ]; then echo "MOFED container not found"; exit 1; fi; \
+            echo "Found MOFED container: $$CID"; \
+            KERN=$$(uname -r); \
+            MOD=/lib/modules/$${KERN}/extra/mlnx-ofa_kernel/drivers/fwctl; \
+            crictl exec $$CID insmod $${MOD}/fwctl.ko; \
+            crictl exec $$CID insmod $${MOD}/mlx5/mlx5_fwctl.ko; \
+            lsmod | grep -q mlx5_fwctl && echo "fwctl modules loaded successfully" || { echo "Failed to load fwctl"; exit 1; }'
+
+          [Install]
+          WantedBy=multi-user.target
+      - name: load-fwctl.timer
+        enabled: true
+        contents: |
+          [Unit]
+          Description=Timer to load fwctl kernel modules after MOFED is ready
+
+          [Timer]
+          OnBootSec=90s
+          OnUnitInactiveSec=60s
+
+          [Install]
+          WantedBy=timers.target
+EOF
+~~~
+Create the machine config on the cluster
+~~~bash
+$ oc create -f mc-load-fwctl.yaml
+~~~
+We can monitor the progress of setting the core user password MachineConfig using the `oc get mcp` command.
 
 ## Validate Spectrum-X Topology
 
