@@ -108,7 +108,7 @@ $ oc create -f 99-machineconfig-nvd-srv-36.yaml
 machineconfig.machineconfiguration.openshift.io/99-master-nvd-srv-36 created
 ~~~
 
-To validate this has been configured we can use `dmesg` output and `oc describe node` to see iommu and hughpages are set.
+To validate this has been configured we can use `dmesg` output and `oc describe node` to see iommu and hughpages are set or even better with `cat /proc/cmdline` in each node.
 
 ## Set RDMA Subsystem Namespace Awareness
 
