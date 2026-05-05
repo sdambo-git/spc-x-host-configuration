@@ -320,7 +320,7 @@ sriov-network-operator-5995bb94f6-qbsgd   1/1     Running   0          18m
 Finally patch the sriovoperatorconfig to work with the NVIDIA Network Operator and DOCA/MOFED. Note if the nodes are workers instead of masters and workers switch to workers in node role.
 
 ~~~bash
-oc patch sriovoperatorconfig default --type=merge -n openshift-sriov-network-operator --patch '{ "spec": { "configDaemonNodeSelector": { "network.nvidia.com/operator.mofed.wait": "false", "node-role.kubernetes.io/master": "", "feature.node.kubernetes.io/pci-15b3.sriov.capable": "true" } } }'
+oc patch sriovoperatorconfig default --type=merge -n openshift-sriov-network-operator --patch '{ "spec": { "configDaemonNodeSelector": { "network.nvidia.com/operator.mofed.wait": "false", "node-role.kubernetes.io/worker": "", "feature.node.kubernetes.io/pci-15b3.sriov.capable": "true" } } }'
 ~~~
 
 ## Configuring NMState Operator
