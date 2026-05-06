@@ -384,6 +384,10 @@ spec:
       repository: nvcr.io/nvidia/mellanox
       version: network-operator-v26.1.0
     logLevel: debug
+    nicFirmwareStorage:
+      availableStorageSize: 1Gi
+      create: false
+      pvcName: nic-fw-storage-pvc
     operator:
       containerResources:
       - limits:
