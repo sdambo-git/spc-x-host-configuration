@@ -636,9 +636,24 @@ spec:
       version: RA2.1
 EOF
 ~~~
-
+Now look at the nic configuration operator log again you will see
 ~~~bash
-
+2026-05-06T09:23:10.177271187Z	LEVEL(-2)	controller/nicconfigurationtemplate_controller.go:126	Applying template spc-x-config to device dell-h200-3-a2dc-vn0kk4nrfcbnv48b63dz
+2026-05-06T09:23:10.177287008Z	LEVEL(-2)	controller/nicconfigurationtemplate_controller.go:126	Applying template spc-x-config to device dell-h200-3-a2dc-vn0kk4nrfcbnv48b63ek
+2026-05-06T09:23:10.177293925Z	LEVEL(-2)	controller/nicconfigurationtemplate_controller.go:126	Applying template spc-x-config to device dell-h200-3-a2dc-vn0kk4nrfcbnv48b63fv
+2026-05-06T09:23:10.177298917Z	LEVEL(-2)	controller/nicconfigurationtemplate_controller.go:126	Applying template spc-x-config to device dell-h200-3-a2dc-vn0kk4nrfcbnv48u600r
+2026-05-06T09:23:10.177305884Z	LEVEL(-2)	controller/nicconfigurationtemplate_controller.go:126	Applying template spc-x-config to device dell-h200-2-a2dc-vn0kk4nrfcbnv48b63fz
+2026-05-06T09:23:10.177311179Z	LEVEL(-2)	controller/nicconfigurationtemplate_controller.go:126	Applying template spc-x-config to device dell-h200-2-a2dc-vn0kk4nrfcbnv495600o
+2026-05-06T09:23:10.177316032Z	LEVEL(-2)	controller/nicconfigurationtemplate_controller.go:126	Applying template spc-x-config to device dell-h200-3-a2dc-vn0kk4nrfcbnv48b63bk
+2026-05-06T09:23:10.177320412Z	LEVEL(-2)	controller/template_matcher.go:86	Device doesn't match any configuration template, resetting the spec	{"device": "dell-h200-3-a2dc-vn0kk4nrfcbnv48b63jw"}
+2026-05-06T09:23:10.226463124Z	LEVEL(-2)	controller/nicconfigurationtemplate_controller.go:126	Applying template spc-x-config to device dell-h200-3-a2dc-vn0kk4nrfcbnv48b63ka
+2026-05-06T09:23:10.226473054Z	LEVEL(-2)	controller/template_matcher.go:86	Device doesn't match any configuration template, resetting the spec	{"device": "dell-h200-2-a2dc-vn0kk4nrfcbnv48b637k"}
+2026-05-06T09:23:10.276467313Z	LEVEL(-2)	controller/nicconfigurationtemplate_controller.go:126	Applying template spc-x-config to device dell-h200-2-a2dc-vn0kk4nrfcbnv48b63ch
+2026-05-06T09:23:10.276488071Z	LEVEL(-2)	controller/template_matcher.go:86	Device doesn't match any configuration template, resetting the spec	{"device": "dell-h200-3-a2dc-il0hfwrm7403146a00k8"}
+2026-05-06T09:23:10.324975338Z	LEVEL(-2)	controller/nicconfigurationtemplate_controller.go:126	Applying template spc-x-config to device dell-h200-3-a2dc-vn0kk4nrfcbnv48b63es
+2026-05-06T09:23:10.324983742Z	LEVEL(-2)	controller/nicconfigurationtemplate_controller.go:126	Applying template spc-x-config to device dell-h200-3-a2dc-vn0kk4nrfcbnv48b63j5
+2026-05-06T09:23:10.324989508Z	LEVEL(-2)	controller/template_matcher.go:86	Device doesn't match any configuration template, resetting the spec	{"device": "dell-h200-2-a2dc-il0hfwrm7403146a00mn"}
+2026-05-06T09:23:10.376169565Z	LEVEL(-2)	controller/nicconfigurationtemplate_controller.go:126	Applying template spc-x-config to device dell-h200-2-a2dc-vn0kk4nrfcbnv48b63f3
 ~~~
 
 ## Configuring NVIDIA GPU Operator
