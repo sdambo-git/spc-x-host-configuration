@@ -558,11 +558,20 @@ metadata:
   namespace: nvidia-network-operator
 spec:
   nodeSelector:
-    kubernetes.io/hostname: nvd-srv-36.nvidia.eng.rdu2.dc.redhat.com # Drop section if want on all nodes 
+    node-role.kubernetes.io/worker: ""
   nicSelector:
     nicType: "a2dc" # BlueField-3 SuperNIC Type
     pciAddresses:
-      - "0002:01:00.0" # Drop for all nics to be configured or specifically set for just certain nic
+    - "0000:18:00.0" 
+    - "0000:1a:00.0" 
+    - "0000:3a:00.0" 
+    - "0000:4d:00.0" 
+    - "0000:5d:00.0" 
+    - "0000:9b:00.0"
+    - "0000:ba:00.0"
+    - "0000:ca:00.0"
+    - "0000:cc:00.0"
+    - "0000:db:00.0"
   template:
     nicFirmwareSourceRef: spc-x-doca-pcc
     updatePolicy: Update
