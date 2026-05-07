@@ -657,7 +657,7 @@ Now look at the nic configuration operator log again you will see
 ~~~
 
 ## Configuring NVIDIA GPU Operator
-## Note ! In case you need to re-install the GPU operator!
+## Note! In case you need to re-install the GPU operator!
 In this case you probably will encounter with CrashLoopBackOff pods of nvidia-driver-daemonset.the way to solve it is to add the following fix to the GPU cluster policy.
 ~~~bash
 driver:
