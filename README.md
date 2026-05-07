@@ -938,7 +938,7 @@ metadata:
 spec:
   # Add fields here
   ovsHardwareOffloadConfig:
-    name: master
+    name: worker
 EOF
 ~~~
 
