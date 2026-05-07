@@ -657,6 +657,19 @@ Now look at the nic configuration operator log again you will see
 ~~~
 
 ## Configuring NVIDIA GPU Operator
+## Note ! In case you need to re-install the GPU operator!
+In this case you probably will encounter with CrashLoopBackOff pods of nvidia-driver-daemonset.the way to solve it is to add the following fix to the GPU cluster policy.
+~~~bash
+driver:
+  manager:
+    repository: ghcr.io/nvidia
+    image: k8s-driver-manager
+    version: ae3f46db
+~~~
+enter each node and remove the nvidia_fs loaded module by running
+~~~bash
+rmmod nvidia_fs
+~~~
 
 The NVIDIA GPU Operator is installed but we need to create a GPU cluster policy custom resource file like the one below.
 
