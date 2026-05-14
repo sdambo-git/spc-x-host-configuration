@@ -1037,37 +1037,6 @@ Removing debug pod ...
 
 This completes the physical interface confguration section.
 
-## Configure MTU
-The MTU part of configuration could be done using NMState Policy, The following example configures port eth_rail0.
-
-No need to configure ovs flows, The SPX Operator configures the OVS flows.
-
-~~~bash
-$ cat <<EOF > nncp-mtu-rail0.yaml
-apiVersion: nmstate.io/v1
-kind: NodeNetworkConfigurationPolicy
-metadata:
-  name: nncp-mtu-rail0
-spec:
-  desiredState:
-    interfaces:
-    - description: mtu 9216 eth_rail0
-      mtu: 9216
-      name: eth_rail0
-      state: up
-      type: ethernet
-  nodeSelector:
-    node-role.kubernetes.io/worker: ""
-EOF
-
-~~~
-Create the NodeNetworkConfigurationPolicy on the cluster
-
-~~~bash
-$ oc create -f nncp-mtu-rail0.yaml
-~~~ 
-
-
 ## Configure Spectrum-X CNI
 
 The next thing we need to configure is the Spectrum-X CNI.  This is composed of two components: nv-ipam CIDRPool and an OVSNetwork.   These configuration files will need to be created for each rail interface in the system.   
