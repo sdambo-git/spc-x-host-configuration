@@ -1165,7 +1165,7 @@ Create the machine config on the cluster we can create it on the cluster. We wil
 ~~~bash
 $ oc create -f mc-load-fwctl.yaml
 ~~~
-We can monitor the progress of setting the core user password MachineConfig using the `oc get mcp` command.
+We can monitor the progress of the machine configuration using the `oc get mcp` command.
 
 ## Validate Spectrum-X Topology
 
