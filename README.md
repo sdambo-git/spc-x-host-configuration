@@ -18,7 +18,6 @@
 - [Configuring LLDPD Daemonset](#configuring-lldpd-daemonset)
 - [Configuring OVS Offload](#configuring-ovs-offload)
 - [Configure Physical Rail Interface Attributes](#configure-physical-rail-interface-attributes)
-- [Configure MTU](#configure-MTU)
 - [Configure Spectrum-X CNI](#configure-spectrum-x-CNI)
 - [Solve missing kernel modules in NIC Configuration Daemon](#Solve-missing-kernel-modules-in-NIC-Configuration-Daemon)
 - [Validate Spectrum-X Topology](#validate-spectrum-x-topology)
