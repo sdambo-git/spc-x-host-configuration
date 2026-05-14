@@ -1076,6 +1076,7 @@ cidrpool.nv-ipam.nvidia.com/eth-rail0 created
 The OVSNetwork custom resource file looks similar to the following example.   Each rail will require a OVSNetwork configuration.
 
 ~~~bash
+$ cat <<EOF > ovsnetwork-eth-rail0.yaml
 apiVersion: sriovnetwork.openshift.io/v1
 kind: OVSNetwork
 metadata:
@@ -1094,10 +1095,14 @@ spec:
     }
   networkNamespace: default
   resourceName: eth_rail0
+EOF
 ~~~
 
 Again once we create The OVSNetwork custom resource file we can create it on the cluster. We will repeat this for each rail.
 
+~~~bash
+oc create -f ovsnetwork-eth-rail0.yaml
+~~~
 
 ## Solve missing kernel modules in NIC Configuration Daemon 
 
