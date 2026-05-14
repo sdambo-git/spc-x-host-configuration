@@ -1012,7 +1012,7 @@ EOF
 Once we generate the SriovNetworkNodePolicy we can create it on the cluster.  We will repeat this for each rail.
 
 ~~~bash
-$ oc apply -f snnp-eth-rail0.yaml
+$ oc create -f snnp-eth-rail0.yaml
 sriovnetworknodepolicy.sriovnetwork.openshift.io/eth-rail0 created
 ~~~
 
@@ -1066,6 +1066,13 @@ spec:
 EOF
 ~~~
 
+Once we generate the CIDRPool we can create it on the cluster. We will repeat this for each rail.
+
+~~~bash
+$ oc create -f cidrpool_rail0.yaml 
+cidrpool.nv-ipam.nvidia.com/eth-rail0 created
+~~~
+
 The OVSNetwork custom resource file looks similar to the following example.   Each rail will require a OVSNetwork configuration.
 
 ~~~bash
@@ -1088,6 +1095,10 @@ spec:
   networkNamespace: default
   resourceName: eth_rail0
 ~~~
+
+Again once we create The OVSNetwork custom resource file we can create it on the cluster. We will repeat this for each rail.
+
+
 ## Solve missing kernel modules in NIC Configuration Daemon 
 
 There is an issue that we can see in NIC Configuration Daemon logs, that fwctl.ko and mlx5_fwctl.ko modules arn't loaded on the worker nods in order for dms client commands to work ,In order to solve it we should load them using machine       config 
@@ -1144,7 +1155,8 @@ spec:
           WantedBy=timers.target
 EOF
 ~~~
-Create the machine config on the cluster
+Create the machine config on the cluster we can create it on the cluster. We will repeat this for each rail.
+
 ~~~bash
 $ oc create -f mc-load-fwctl.yaml
 ~~~
