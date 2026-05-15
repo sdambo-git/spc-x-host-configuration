@@ -7,6 +7,7 @@
 - [Environment](#environment)
 - [Set Core User Password for Troubleshooting](#set-core-user-password-for-troubleshooting)
 - [Set Hugepages and IOMMU off](#set-hugepages-and-iommu-off)
+- [Set RDMA Subsystem Namespace Awareness](#set-rdma-subsystem-namespace-awareness)
 - [Set UDEV Rules for Rail Device Names](#set-udev-rules-for-rail-device-names)
 - [Configuring NFD Operator](#configuring-nfd-operator)
 - [Configuring SRIOV Operator](#configuring-sriov-operator)
