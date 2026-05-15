@@ -190,7 +190,7 @@ apiVersion: machineconfiguration.openshift.io/v1
 kind: MachineConfig
 metadata:
    labels:
-     machineconfiguration.openshift.io/role: master # Change to worker when using a real multi-node cluster
+     machineconfiguration.openshift.io/role: worker
    name: 99-machine-config-udev-network
 spec:
    config:
