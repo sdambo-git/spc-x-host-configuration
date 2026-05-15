@@ -47,7 +47,7 @@ apiVersion: machineconfiguration.openshift.io/v1
 kind: MachineConfig
 metadata:
   labels:
-    machineconfiguration.openshift.io/role: master  # Note if you want this on worker nodes then change the role.
+    machineconfiguration.openshift.io/role: worker
   name: set-core-user-password
 spec:
   config:
@@ -83,15 +83,16 @@ Before completing this section make sure to test that it is possible to login as
 We need to set hughpages and iommu.  This can be achieved with the following machine configuration.
 
 ~~~bash
-$ cat <<EOF > 99-machineconfig-nvd-srv-36.yaml
+$ cat <<EOF > 99-machineconfig-kernel-args-hugepages.yaml
 apiVersion: machineconfiguration.openshift.io/v1
 kind: MachineConfig
 metadata:
   labels:
     machineconfiguration.openshift.io/role: worker
-  name: 99-master-nvd-srv-36
+  name: 99-kernel-args-hugepages
 spec:
   kernelArguments:
+    - "module_blacklist=irdma"
     - default_hugepagesz=1G
     - hugepagesz=1G
     - hugepages=16
@@ -104,8 +105,8 @@ EOF
 Create the machine configuration on the cluster.  This will cause nodes to reboot in a rolling fashion and can be monitored with `oc get mcp`.
 
 ~~~bash
-$ oc create -f 99-machineconfig-nvd-srv-36.yaml
-machineconfig.machineconfiguration.openshift.io/99-master-nvd-srv-36 created
+$ oc create -f 99-machineconfig-kernel-args-hugepages.yaml
+machineconfig.machineconfiguration.openshift.io/99-kernel-args-hugepages created
 ~~~
 
 To validate this has been configured we can use `dmesg` output and `oc describe node` to see iommu and hughpages are set or even better with `cat /proc/cmdline` in each node.
