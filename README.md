@@ -116,11 +116,11 @@ To validate this has been configured we can use `dmesg` output and `oc describe 
 enable RDMA device namespace separation, which is essential for proper resource isolation in containerized environments.
 
 ~~~bash
-IB_CORE=$(echo "options ib_core netns_mode=0" | base64 -w 0)
+$ IB_CORE=$(echo "options ib_core netns_mode=0" | base64 -w 0)
 ~~~
 
 ~~~bash
-cat <<EOF > 99-worker-ib-core-netns.yaml
+$ cat <<EOF > 99-worker-ib-core-netns.yaml
 apiVersion: machineconfiguration.openshift.io/v1
 kind: MachineConfig
 metadata:
