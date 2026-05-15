@@ -145,7 +145,7 @@ EOF
 Create the machine configuration on the cluster.  This will cause nodes to reboot in a rolling fashion and can be monitored with `oc get mcp`.
 
 ~~~bash
-oc create -f 99-worker-ib-core-netns.yaml 
+$ oc create -f 99-worker-ib-core-netns.yaml 
 machineconfig.machineconfiguration.openshift.io/99-worker-ib-core-netns created
 ~~~
 
