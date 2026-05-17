@@ -510,6 +510,36 @@ spectrum-x-flowcontroller-w9wf9                                   1/1     Runnin
 Now we need to configure the `MaintenanceOperatorConfig` custom resource file.  In this file we can specify the log level, the number of parallel operations (ie how many nodes to take offline at once) and the time the node is kept in maintenance (a number in seconds that provides enough time for the maintenance work to happen before the operator will remove the node maintenance policy).  In our example we are just going to allow one maintenance operation at a time and that operation has 300 seconds to finish before the node is returned to schedulable.
 
 ~~~bash
+$ cat <<EOF > node-maintenance-operator.yaml
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: nvidia-maintenance-operator
+---
+apiVersion: operators.coreos.com/v1
+kind: OperatorGroup
+metadata:
+  name: nvidia-maintenance-operator
+  namespace: nvidia-maintenance-operator
+spec:
+  targetNamespaces:
+  - nvidia-maintenance-operator
+---
+apiVersion: operators.coreos.com/v1alpha1
+kind: Subscription
+metadata:
+  name: nvidia-maintenance-operator
+  namespace: nvidia-maintenance-operator
+spec:
+  channel: v0.2
+  installPlanApproval: Automatic
+  name: nvidia-maintenance-operator
+  source: certified-operators
+  sourceNamespace: openshift-marketplace
+  startingCSV: nvidia-maintenance-operator.v0.2.3
+EOF
+
+~~~bash
 $ cat <<EOF > maintenance-operator-config.yaml
 apiVersion: maintenance.nvidia.com/v1alpha1
 kind: MaintenanceOperatorConfig
