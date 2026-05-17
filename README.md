@@ -360,7 +360,45 @@ We will configure NNCP policies at a later point in this document.
 
 ## Configuring NVIDIA Network Operator
 
-With the NVIDIA Network operator up we need to create the NicClusterPolicy custom resource file. Note in this file there are values coded for my environment.  For example the `nic-fw-storage-pvc` is a persistent volume claim I have precreated in my environment using the Local Volume Storage Operator.
+With the NVIDIA Network operator up we need to create the NicClusterPolicy custom resource file. Note in this file there are values coded for my environment.  For example the `nic-fw-storage-pvc` is a persistent volume claim I have precreated in my environment using NFS. You need to have NFS share prior to running the NicClusterPolicy , after that create a PV and PVC to use the NFS share.
+
+~~~bash
+$ cat <<EOF > nfs-pv.yaml
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: nfs-nic-fw-storage
+spec:
+  capacity:
+    storage: 10Gi
+  accessModes:
+    - ReadWriteMany
+  persistentVolumeReclaimPolicy: Retain
+  nfs:
+    server: nvd-srv-39.nvidia.eng.rdu2.dc.redhat.com
+    path: /home/nfs-share/nic-fw-storage
+~~~
+Now we need to create the PVC file , but before it we need to create nvidia-network-operator namespace
+
+~~~bash
+oc create namespace nvidia-network-operator
+~~~
+
+~~~bash
+$ cat <<EOF > nfs-pvc.yaml
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: nic-fw-storage-pvc
+  namespace: nvidia-network-operator
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 10Gi
+  volumeName: nfs-nic-fw-storage
+~~~
 
 ~~~bash
 $ cat <<EOF > ncp-spectrumx.yaml
