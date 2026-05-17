@@ -377,6 +377,7 @@ spec:
   nfs:
     server: nvd-srv-39.nvidia.eng.rdu2.dc.redhat.com
     path: /home/nfs-share/nic-fw-storage
+EOF
 ~~~
 Now we need to create the PVC file , but before it we need to create nvidia-network-operator namespace
 
@@ -398,6 +399,7 @@ spec:
     requests:
       storage: 10Gi
   volumeName: nfs-nic-fw-storage
+EOF
 ~~~
 
 ~~~bash
