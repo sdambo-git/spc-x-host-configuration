@@ -379,7 +379,7 @@ spec:
     path: /home/nfs-share/nic-fw-storage
 EOF
 ~~~
-Now we need to create the PVC file , but before it we need to create nvidia-network-operator namespace
+Now we need to create the PVC file , but before this we need to create nvidia-network-operator namespace
 
 ~~~bash
 oc create namespace nvidia-network-operator
@@ -401,6 +401,14 @@ spec:
   volumeName: nfs-nic-fw-storage
 EOF
 ~~~
+Lets check that the PVC is bound to the PV
+
+~~~bash
+oc get pvc -n nvidia-network-operator
+NAME                 STATUS   VOLUME               CAPACITY   ACCESS MODES   STORAGECLASS   VOLUMEATTRIBUTESCLASS   AGE
+nic-fw-storage-pvc   Bound    nfs-nic-fw-storage   10Gi       RWX                           <unset>                 21s
+~~~
+Now we should create the nic cluster policy
 
 ~~~bash
 $ cat <<EOF > ncp-spectrumx.yaml
