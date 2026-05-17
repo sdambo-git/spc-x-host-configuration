@@ -292,8 +292,14 @@ metadata:
   name: default
   namespace: openshift-sriov-network-operator
 spec:
+  configDaemonNodeSelector:
+    feature.node.kubernetes.io/pci-15b3.sriov.capable: 'true'
+    network.nvidia.com/operator.mofed.wait: 'false'
+    node-role.kubernetes.io/worker: '' 
   enableInjector: true
   enableOperatorWebhook: true
+  featureGates:
+    manageSoftwareBridges: true
   logLevel: 2
 EOF
 ~~~
