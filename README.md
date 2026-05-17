@@ -538,6 +538,7 @@ spec:
   sourceNamespace: openshift-marketplace
   startingCSV: nvidia-maintenance-operator.v0.2.3
 EOF
+~~~
 
 ~~~bash
 $ cat <<EOF > maintenance-operator-config.yaml
