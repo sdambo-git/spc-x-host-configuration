@@ -1191,10 +1191,33 @@ oc create -f ovsnetwork-eth-rail0.yaml
 
 ## Solve missing kernel modules in NIC Configuration Daemon 
 
-There is an issue that we can see in NIC Configuration Daemon logs, that fwctl.ko and mlx5_fwctl.ko modules arn't loaded on the worker nods in order for dms client commands to work ,In order to solve it we should load them using machine       config 
+There is an issue that we can see in NIC Configuration Daemon logs, that fwctl.ko and mlx5_fwctl.ko modules arn't loaded on the worker nods in order for dms client commands to work ,In order to solve it we should load them using machine config.
+generate the base64 
 
 ~~~bash
-$ cat <<EOF > mc-load-fwctl.yaml
+FWCTL_SCRIPT=$(base64 -w0 << 'EOF'
+#!/bin/bash
+if lsmod | grep -q mlx5_fwctl; then
+  echo "fwctl already loaded"; exit 0
+fi
+CID=$(crictl ps --name mofed-container --state running -q 2>/dev/null | head -1)
+if [ -z "$CID" ]; then
+  echo "MOFED container not found"; exit 1
+fi
+echo "Found MOFED container: $CID"
+KERN=$(uname -r)
+MOD=/lib/modules/${KERN}/extra/mlnx-ofa_kernel/drivers/fwctl
+crictl exec "$CID" insmod ${MOD}/fwctl.ko
+crictl exec "$CID" insmod ${MOD}/mlx5/mlx5_fwctl.ko
+lsmod | grep -q mlx5_fwctl && echo "fwctl modules loaded successfully" || { echo "Failed to load fwctl"; exit 1; }
+EOF
+)
+~~~
+
+create the machine config
+
+~~~bash
+cat <<EOF > mc-load-fwctl.yaml
 apiVersion: machineconfiguration.openshift.io/v1
 kind: MachineConfig
 metadata:
@@ -1205,6 +1228,13 @@ spec:
   config:
     ignition:
       version: 3.2.0
+    storage:
+      files:
+      - contents:
+          source: data:text/plain;base64,${FWCTL_SCRIPT}
+        mode: 0755
+        overwrite: true
+        path: /usr/local/bin/load-fwctl.sh
     systemd:
       units:
       - name: load-fwctl.service
@@ -1213,22 +1243,10 @@ spec:
           [Unit]
           Description=Load fwctl kernel modules from MOFED container
           After=crio.service kubelet.service
-
           [Service]
           Type=oneshot
           RemainAfterExit=yes
-          Environment=CONTAINER_RUNTIME_ENDPOINT=unix:///run/crio/crio.sock
-          ExecStart=/bin/bash -c '\
-            if lsmod | grep -q mlx5_fwctl; then echo "fwctl already loaded"; exit 0; fi; \
-            CID=$$(crictl ps --name mofed-container --state running -q 2>/dev/null | head -1); \
-            if [ -z "$$CID" ]; then echo "MOFED container not found"; exit 1; fi; \
-            echo "Found MOFED container: $$CID"; \
-            KERN=$$(uname -r); \
-            MOD=/lib/modules/$${KERN}/extra/mlnx-ofa_kernel/drivers/fwctl; \
-            crictl exec $$CID insmod $${MOD}/fwctl.ko; \
-            crictl exec $$CID insmod $${MOD}/mlx5/mlx5_fwctl.ko; \
-            lsmod | grep -q mlx5_fwctl && echo "fwctl modules loaded successfully" || { echo "Failed to load fwctl"; exit 1; }'
-
+          ExecStart=/usr/local/bin/load-fwctl.sh
           [Install]
           WantedBy=multi-user.target
       - name: load-fwctl.timer
@@ -1236,11 +1254,9 @@ spec:
         contents: |
           [Unit]
           Description=Timer to load fwctl kernel modules after MOFED is ready
-
           [Timer]
           OnBootSec=90s
           OnUnitInactiveSec=60s
-
           [Install]
           WantedBy=timers.target
 EOF
