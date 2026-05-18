@@ -434,8 +434,8 @@ spec:
           cpu: 1000m
           memory: 10000Mi
       image: nic-configuration-operator-daemon
-      repository: nvcr.io/nvidia/mellanox
-      version: network-operator-v26.1.0
+      repository: nvcr.io/nvstaging/mellanox
+      version: network-operator-v26.1.1-rc.7
     logLevel: debug
     nicFirmwareStorage:
       availableStorageSize: 1Gi
@@ -454,10 +454,10 @@ spec:
       repository: nvcr.io/nvidia/mellanox
       version: network-operator-v26.1.0
   nvIpam:
+    enableWebhook: false
     image: nvidia-k8s-ipam
     repository: nvcr.io/nvidia/mellanox
     version: network-operator-v26.1.0
-    enableWebhook: false
   ofedDriver:
     env:
     - name: UNLOAD_STORAGE_MODULES
@@ -484,7 +484,7 @@ spec:
         timeoutSeconds: 300
       maxParallelUpgrades: 1
       safeLoad: false
-    version: doca3.3.0-26.01-0.4.6.0-1
+    version: doca3.4.0-26.04-0.5.3.0-0
   spectrumXOperator:
     image: spectrum-x-operator
     repository: nvcr.io/nvidia/mellanox
