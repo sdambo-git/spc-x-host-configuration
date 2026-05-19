@@ -19,7 +19,6 @@
 - [Configuring LLDPD Daemonset](#configuring-lldpd-daemonset)
 - [Configuring OVS Offload](#configuring-ovs-offload)
 - [Configure Physical Rail Interface Attributes](#configure-physical-rail-interface-attributes)
-- [Configure MTU](#configure-MTU)
 - [Configure Spectrum-X CNI](#configure-spectrum-x-CNI)
 - [Solve missing kernel modules in NIC Configuration Daemon](#Solve-missing-kernel-modules-in-NIC-Configuration-Daemon)
 - [Validate Spectrum-X Topology](#validate-spectrum-x-topology)
@@ -298,7 +297,7 @@ spec:
   configDaemonNodeSelector:
     feature.node.kubernetes.io/pci-15b3.sriov.capable: 'true'
     network.nvidia.com/operator.mofed.wait: 'false'
-    node-role.kubernetes.io/worker: ''
+    node-role.kubernetes.io/worker: '' 
   enableInjector: true
   enableOperatorWebhook: true
   featureGates:
@@ -365,7 +364,55 @@ We will configure NNCP policies at a later point in this document.
 
 ## Configuring NVIDIA Network Operator
 
-With the NVIDIA Network operator up we need to create the NicClusterPolicy custom resource file. Note in this file there are values coded for my environment.  For example the `nic-fw-storage-pvc` is a persistent volume claim I have precreated in my environment using the Local Volume Storage Operator.
+With the NVIDIA Network operator up we need to create the NicClusterPolicy custom resource file. Note in this file there are values coded for my environment.  For example the `nic-fw-storage-pvc` is a persistent volume claim I have precreated in my environment using NFS. You need to have NFS share prior to running the NicClusterPolicy , after that create a PV and PVC to use the NFS share.
+
+~~~bash
+$ cat <<EOF > nfs-pv.yaml
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: nfs-nic-fw-storage
+spec:
+  capacity:
+    storage: 10Gi
+  accessModes:
+    - ReadWriteMany
+  persistentVolumeReclaimPolicy: Retain
+  nfs:
+    server: nvd-srv-39.nvidia.eng.rdu2.dc.redhat.com
+    path: /home/nfs-share/nic-fw-storage
+EOF
+~~~
+Now we need to create the PVC file , but before this we need to create nvidia-network-operator namespace
+
+~~~bash
+oc create namespace nvidia-network-operator
+~~~
+
+~~~bash
+$ cat <<EOF > nfs-pvc.yaml
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: nic-fw-storage-pvc
+  namespace: nvidia-network-operator
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 10Gi
+  volumeName: nfs-nic-fw-storage
+EOF
+~~~
+Lets check that the PVC is bound to the PV
+
+~~~bash
+oc get pvc -n nvidia-network-operator
+NAME                 STATUS   VOLUME               CAPACITY   ACCESS MODES   STORAGECLASS   VOLUMEATTRIBUTESCLASS   AGE
+nic-fw-storage-pvc   Bound    nfs-nic-fw-storage   10Gi       RWX                           <unset>                 21s
+~~~
+Now we should create the nic cluster policy
 
 ~~~bash
 $ cat <<EOF > ncp-spectrumx.yaml
@@ -385,9 +432,13 @@ spec:
           cpu: 1000m
           memory: 10000Mi
       image: nic-configuration-operator-daemon
-      repository: nvcr.io/nvidia/mellanox
-      version: network-operator-v26.1.0
+      repository: nvcr.io/nvstaging/mellanox
+      version: network-operator-v26.1.1-rc.7
     logLevel: debug
+    nicFirmwareStorage:
+      availableStorageSize: 1Gi
+      create: false
+      pvcName: nic-fw-storage-pvc
     operator:
       containerResources:
       - limits:
@@ -401,10 +452,10 @@ spec:
       repository: nvcr.io/nvidia/mellanox
       version: network-operator-v26.1.0
   nvIpam:
+    enableWebhook: false
     image: nvidia-k8s-ipam
     repository: nvcr.io/nvidia/mellanox
     version: network-operator-v26.1.0
-    enableWebhook: false
   ofedDriver:
     env:
     - name: UNLOAD_STORAGE_MODULES
@@ -431,7 +482,7 @@ spec:
         timeoutSeconds: 300
       maxParallelUpgrades: 1
       safeLoad: false
-    version: doca3.3.0-26.01-0.4.6.0-1
+    version: doca3.4.0-26.04-0.5.3.0-0
   spectrumXOperator:
     image: spectrum-x-operator
     repository: nvcr.io/nvidia/mellanox
@@ -461,6 +512,37 @@ spectrum-x-flowcontroller-w9wf9                                   1/1     Runnin
 ## Configuring NVIDIA Maintenance Operator
 
 Now we need to configure the `MaintenanceOperatorConfig` custom resource file.  In this file we can specify the log level, the number of parallel operations (ie how many nodes to take offline at once) and the time the node is kept in maintenance (a number in seconds that provides enough time for the maintenance work to happen before the operator will remove the node maintenance policy).  In our example we are just going to allow one maintenance operation at a time and that operation has 300 seconds to finish before the node is returned to schedulable.
+
+~~~bash
+$ cat <<EOF > node-maintenance-operator.yaml
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: nvidia-maintenance-operator
+---
+apiVersion: operators.coreos.com/v1
+kind: OperatorGroup
+metadata:
+  name: nvidia-maintenance-operator
+  namespace: nvidia-maintenance-operator
+spec:
+  targetNamespaces:
+  - nvidia-maintenance-operator
+---
+apiVersion: operators.coreos.com/v1alpha1
+kind: Subscription
+metadata:
+  name: nvidia-maintenance-operator
+  namespace: nvidia-maintenance-operator
+spec:
+  channel: v0.2
+  installPlanApproval: Automatic
+  name: nvidia-maintenance-operator
+  source: certified-operators
+  sourceNamespace: openshift-marketplace
+  startingCSV: nvidia-maintenance-operator.v0.2.3
+EOF
+~~~
 
 ~~~bash
 $ cat <<EOF > maintenance-operator-config.yaml
@@ -558,11 +640,20 @@ metadata:
   namespace: nvidia-network-operator
 spec:
   nodeSelector:
-    kubernetes.io/hostname: nvd-srv-36.nvidia.eng.rdu2.dc.redhat.com # Drop section if want on all nodes 
+    node-role.kubernetes.io/worker: ""
   nicSelector:
     nicType: "a2dc" # BlueField-3 SuperNIC Type
     pciAddresses:
-      - "0002:01:00.0" # Drop for all nics to be configured or specifically set for just certain nic
+    - "0000:18:00.0" 
+    - "0000:1a:00.0" 
+    - "0000:3a:00.0" 
+    - "0000:4d:00.0" 
+    - "0000:5d:00.0" 
+    - "0000:9b:00.0"
+    - "0000:ba:00.0"
+    - "0000:ca:00.0"
+    - "0000:cc:00.0"
+    - "0000:db:00.0"
   template:
     nicFirmwareSourceRef: spc-x-doca-pcc
     updatePolicy: Update
@@ -627,9 +718,40 @@ spec:
       version: RA2.1
 EOF
 ~~~
-
+Now look at the nic configuration operator log again you will see
+~~~bash
+2026-05-06T09:23:10.177271187Z	LEVEL(-2)	controller/nicconfigurationtemplate_controller.go:126	Applying template spc-x-config to device dell-h200-3-a2dc-vn0kk4nrfcbnv48b63dz
+2026-05-06T09:23:10.177287008Z	LEVEL(-2)	controller/nicconfigurationtemplate_controller.go:126	Applying template spc-x-config to device dell-h200-3-a2dc-vn0kk4nrfcbnv48b63ek
+2026-05-06T09:23:10.177293925Z	LEVEL(-2)	controller/nicconfigurationtemplate_controller.go:126	Applying template spc-x-config to device dell-h200-3-a2dc-vn0kk4nrfcbnv48b63fv
+2026-05-06T09:23:10.177298917Z	LEVEL(-2)	controller/nicconfigurationtemplate_controller.go:126	Applying template spc-x-config to device dell-h200-3-a2dc-vn0kk4nrfcbnv48u600r
+2026-05-06T09:23:10.177305884Z	LEVEL(-2)	controller/nicconfigurationtemplate_controller.go:126	Applying template spc-x-config to device dell-h200-2-a2dc-vn0kk4nrfcbnv48b63fz
+2026-05-06T09:23:10.177311179Z	LEVEL(-2)	controller/nicconfigurationtemplate_controller.go:126	Applying template spc-x-config to device dell-h200-2-a2dc-vn0kk4nrfcbnv495600o
+2026-05-06T09:23:10.177316032Z	LEVEL(-2)	controller/nicconfigurationtemplate_controller.go:126	Applying template spc-x-config to device dell-h200-3-a2dc-vn0kk4nrfcbnv48b63bk
+2026-05-06T09:23:10.177320412Z	LEVEL(-2)	controller/template_matcher.go:86	Device doesn't match any configuration template, resetting the spec	{"device": "dell-h200-3-a2dc-vn0kk4nrfcbnv48b63jw"}
+2026-05-06T09:23:10.226463124Z	LEVEL(-2)	controller/nicconfigurationtemplate_controller.go:126	Applying template spc-x-config to device dell-h200-3-a2dc-vn0kk4nrfcbnv48b63ka
+2026-05-06T09:23:10.226473054Z	LEVEL(-2)	controller/template_matcher.go:86	Device doesn't match any configuration template, resetting the spec	{"device": "dell-h200-2-a2dc-vn0kk4nrfcbnv48b637k"}
+2026-05-06T09:23:10.276467313Z	LEVEL(-2)	controller/nicconfigurationtemplate_controller.go:126	Applying template spc-x-config to device dell-h200-2-a2dc-vn0kk4nrfcbnv48b63ch
+2026-05-06T09:23:10.276488071Z	LEVEL(-2)	controller/template_matcher.go:86	Device doesn't match any configuration template, resetting the spec	{"device": "dell-h200-3-a2dc-il0hfwrm7403146a00k8"}
+2026-05-06T09:23:10.324975338Z	LEVEL(-2)	controller/nicconfigurationtemplate_controller.go:126	Applying template spc-x-config to device dell-h200-3-a2dc-vn0kk4nrfcbnv48b63es
+2026-05-06T09:23:10.324983742Z	LEVEL(-2)	controller/nicconfigurationtemplate_controller.go:126	Applying template spc-x-config to device dell-h200-3-a2dc-vn0kk4nrfcbnv48b63j5
+2026-05-06T09:23:10.324989508Z	LEVEL(-2)	controller/template_matcher.go:86	Device doesn't match any configuration template, resetting the spec	{"device": "dell-h200-2-a2dc-il0hfwrm7403146a00mn"}
+2026-05-06T09:23:10.376169565Z	LEVEL(-2)	controller/nicconfigurationtemplate_controller.go:126	Applying template spc-x-config to device dell-h200-2-a2dc-vn0kk4nrfcbnv48b63f3
+~~~
 
 ## Configuring NVIDIA GPU Operator
+## Note! In case you need to re-install the GPU operator!
+In this case you probably will encounter with CrashLoopBackOff pods of nvidia-driver-daemonset.the way to solve it is to add the following fix to the GPU cluster policy.
+~~~bash
+driver:
+  manager:
+    repository: ghcr.io/nvidia
+    image: k8s-driver-manager
+    version: ae3f46db
+~~~
+enter each node and remove the nvidia_fs loaded module by running
+~~~bash
+rmmod nvidia_fs
+~~~
 
 The NVIDIA GPU Operator is installed but we need to create a GPU cluster policy custom resource file like the one below.
 
@@ -898,7 +1020,7 @@ metadata:
 spec:
   # Add fields here
   ovsHardwareOffloadConfig:
-    name: master
+    name: worker
 EOF
 ~~~
 
@@ -943,19 +1065,6 @@ system_version      : "9.6"
 
 We can provide those same settings via a SriovNetworkNodePolicy for each rail interface.  An example of the policy which provides the `switchdev` mode, mtu and vfs count is below.
 
-Pay Attention !! according to the RA2.1 the externallyManaged need to be true. when applying set it to false , because in other case the vf will be remain at 0 and eSwitchMode will remain at legacy ! 
-
-Give it some time and change back the externallyManaged to true . we can use patching for that for example:
-~~~bash
-for p in $(kubectl get sriovnetworknodepolicy -n openshift-sriov-network-operator -o name); do echo "Patching $p..."; kubectl patch $p -n openshift-sriov-network-operator --type merge -p '{"spec":{"externallyManaged":true}}' 2>&1; done
-Patching sriovnetworknodepolicy.sriovnetwork.openshift.io/eth-rail0-node2...
-sriovnetworknodepolicy.sriovnetwork.openshift.io/eth-rail0-node2 patched
-Patching sriovnetworknodepolicy.sriovnetwork.openshift.io/eth-rail0-node3...
-sriovnetworknodepolicy.sriovnetwork.openshift.io/eth-rail0-node3 patched
-.
-.
-~~~
-
 ~~~bash
 $ cat <<EOF > snnp-eth-rail0.yaml
 apiVersion: sriovnetwork.openshift.io/v1
@@ -986,7 +1095,7 @@ EOF
 Once we generate the SriovNetworkNodePolicy we can create it on the cluster.  We will repeat this for each rail.
 
 ~~~bash
-$ oc apply -f snnp-eth-rail0.yaml
+$ oc create -f snnp-eth-rail0.yaml
 sriovnetworknodepolicy.sriovnetwork.openshift.io/eth-rail0 created
 ~~~
 
@@ -1009,37 +1118,6 @@ Removing debug pod ...
 ~~~
 
 This completes the physical interface confguration section.
-
-## Configure MTU
-The MTU part of configuration could be done using NMState Policy, The following example configures port eth_rail0.
-
-No need to configure ovs flows, The SPX Operator configures the OVS flows.
-
-~~~bash
-$ cat <<EOF > nncp-mtu-rail0.yaml
-apiVersion: nmstate.io/v1
-kind: NodeNetworkConfigurationPolicy
-metadata:
-  name: nncp-mtu-rail0
-spec:
-  desiredState:
-    interfaces:
-    - description: mtu 9216 eth_rail0
-      mtu: 9216
-      name: eth_rail0
-      state: up
-      type: ethernet
-  nodeSelector:
-    node-role.kubernetes.io/worker: ""
-EOF
-
-~~~
-Create the NodeNetworkConfigurationPolicy on the cluster
-
-~~~bash
-$ oc create -f nncp-mtu-rail0.yaml
-~~~ 
-
 
 ## Configure Spectrum-X CNI
 
@@ -1071,9 +1149,17 @@ spec:
 EOF
 ~~~
 
+Once we generate the CIDRPool we can create it on the cluster. We will repeat this for each rail.
+
+~~~bash
+$ oc create -f cidrpool_rail0.yaml 
+cidrpool.nv-ipam.nvidia.com/eth-rail0 created
+~~~
+
 The OVSNetwork custom resource file looks similar to the following example.   Each rail will require a OVSNetwork configuration.
 
 ~~~bash
+$ cat <<EOF > ovsnetwork-eth-rail0.yaml
 apiVersion: sriovnetwork.openshift.io/v1
 kind: OVSNetwork
 metadata:
@@ -1092,13 +1178,44 @@ spec:
     }
   networkNamespace: default
   resourceName: eth_rail0
+EOF
 ~~~
-## Solve missing kernel modules in NIC Configuration Daemon 
 
-There is an issue that we can see in NIC Configuration Daemon logs, that fwctl.ko and mlx5_fwctl.ko modules arn't loaded on the worker nods in order for dms client commands to work ,In order to solve it we should load them using machine       config 
+Again once we create The OVSNetwork custom resource file we can create it on the cluster. We will repeat this for each rail.
 
 ~~~bash
-$ cat <<EOF > mc-load-fwctl.yaml
+oc create -f ovsnetwork-eth-rail0.yaml
+~~~
+
+## Solve missing kernel modules in NIC Configuration Daemon 
+
+There is an issue that we can see in NIC Configuration Daemon logs, that fwctl.ko and mlx5_fwctl.ko modules arn't loaded on the worker nods in order for dms client commands to work ,In order to solve it we should load them using machine config.
+generate the base64 
+
+~~~bash
+FWCTL_SCRIPT=$(base64 -w0 << 'EOF'
+#!/bin/bash
+if lsmod | grep -q mlx5_fwctl; then
+  echo "fwctl already loaded"; exit 0
+fi
+CID=$(crictl ps --name mofed-container --state running -q 2>/dev/null | head -1)
+if [ -z "$CID" ]; then
+  echo "MOFED container not found"; exit 1
+fi
+echo "Found MOFED container: $CID"
+KERN=$(uname -r)
+MOD=/lib/modules/${KERN}/extra/mlnx-ofa_kernel/drivers/fwctl
+crictl exec "$CID" insmod ${MOD}/fwctl.ko
+crictl exec "$CID" insmod ${MOD}/mlx5/mlx5_fwctl.ko
+lsmod | grep -q mlx5_fwctl && echo "fwctl modules loaded successfully" || { echo "Failed to load fwctl"; exit 1; }
+EOF
+)
+~~~
+
+create the machine config
+
+~~~bash
+cat <<EOF > mc-load-fwctl.yaml
 apiVersion: machineconfiguration.openshift.io/v1
 kind: MachineConfig
 metadata:
@@ -1109,6 +1226,13 @@ spec:
   config:
     ignition:
       version: 3.2.0
+    storage:
+      files:
+      - contents:
+          source: data:text/plain;base64,${FWCTL_SCRIPT}
+        mode: 0755
+        overwrite: true
+        path: /usr/local/bin/load-fwctl.sh
     systemd:
       units:
       - name: load-fwctl.service
@@ -1117,22 +1241,10 @@ spec:
           [Unit]
           Description=Load fwctl kernel modules from MOFED container
           After=crio.service kubelet.service
-
           [Service]
           Type=oneshot
           RemainAfterExit=yes
-          Environment=CONTAINER_RUNTIME_ENDPOINT=unix:///run/crio/crio.sock
-          ExecStart=/bin/bash -c '\
-            if lsmod | grep -q mlx5_fwctl; then echo "fwctl already loaded"; exit 0; fi; \
-            CID=$$(crictl ps --name mofed-container --state running -q 2>/dev/null | head -1); \
-            if [ -z "$$CID" ]; then echo "MOFED container not found"; exit 1; fi; \
-            echo "Found MOFED container: $$CID"; \
-            KERN=$$(uname -r); \
-            MOD=/lib/modules/$${KERN}/extra/mlnx-ofa_kernel/drivers/fwctl; \
-            crictl exec $$CID insmod $${MOD}/fwctl.ko; \
-            crictl exec $$CID insmod $${MOD}/mlx5/mlx5_fwctl.ko; \
-            lsmod | grep -q mlx5_fwctl && echo "fwctl modules loaded successfully" || { echo "Failed to load fwctl"; exit 1; }'
-
+          ExecStart=/usr/local/bin/load-fwctl.sh
           [Install]
           WantedBy=multi-user.target
       - name: load-fwctl.timer
@@ -1140,20 +1252,19 @@ spec:
         contents: |
           [Unit]
           Description=Timer to load fwctl kernel modules after MOFED is ready
-
           [Timer]
           OnBootSec=90s
           OnUnitInactiveSec=60s
-
           [Install]
           WantedBy=timers.target
 EOF
 ~~~
-Create the machine config on the cluster
+Create the machine config on the cluster we can create it on the cluster. We will repeat this for each rail.
+
 ~~~bash
 $ oc create -f mc-load-fwctl.yaml
 ~~~
-We can monitor the progress of setting the core user password MachineConfig using the `oc get mcp` command.
+We can monitor the progress of the machine configuration using the `oc get mcp` command.
 
 ## Validate Spectrum-X Topology
 
