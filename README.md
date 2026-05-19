@@ -7,6 +7,7 @@
 - [Environment](#environment)
 - [Set Core User Password for Troubleshooting](#set-core-user-password-for-troubleshooting)
 - [Set Hugepages and IOMMU off](#set-hugepages-and-iommu-off)
+- [Set RDMA Subsystem Namespace Awareness](#set-rdma-subsystem-namespace-awareness)
 - [Set UDEV Rules for Rail Device Names](#set-udev-rules-for-rail-device-names)
 - [Configuring NFD Operator](#configuring-nfd-operator)
 - [Configuring SRIOV Operator](#configuring-sriov-operator)
@@ -46,7 +47,7 @@ apiVersion: machineconfiguration.openshift.io/v1
 kind: MachineConfig
 metadata:
   labels:
-    machineconfiguration.openshift.io/role: master  # Note if you want this on worker nodes then change the role.
+    machineconfiguration.openshift.io/role: worker
   name: set-core-user-password
 spec:
   config:
@@ -82,15 +83,16 @@ Before completing this section make sure to test that it is possible to login as
 We need to set hughpages and iommu.  This can be achieved with the following machine configuration.
 
 ~~~bash
-$ cat <<EOF > 99-machineconfig-nvd-srv-36.yaml
+$ cat <<EOF > 99-machineconfig-kernel-args-hugepages.yaml
 apiVersion: machineconfiguration.openshift.io/v1
 kind: MachineConfig
 metadata:
   labels:
     machineconfiguration.openshift.io/role: worker
-  name: 99-master-nvd-srv-36
+  name: 99-kernel-args-hugepages
 spec:
   kernelArguments:
+    - "module_blacklist=irdma"
     - default_hugepagesz=1G
     - hugepagesz=1G
     - hugepages=16
@@ -103,8 +105,8 @@ EOF
 Create the machine configuration on the cluster.  This will cause nodes to reboot in a rolling fashion and can be monitored with `oc get mcp`.
 
 ~~~bash
-$ oc create -f 99-machineconfig-nvd-srv-36.yaml
-machineconfig.machineconfiguration.openshift.io/99-master-nvd-srv-36 created
+$ oc create -f 99-machineconfig-kernel-args-hugepages.yaml
+machineconfig.machineconfiguration.openshift.io/99-kernel-args-hugepages created
 ~~~
 
 To validate this has been configured we can use `dmesg` output and `oc describe node` to see iommu and hughpages are set or even better with `cat /proc/cmdline` in each node.
@@ -114,11 +116,11 @@ To validate this has been configured we can use `dmesg` output and `oc describe 
 enable RDMA device namespace separation, which is essential for proper resource isolation in containerized environments.
 
 ~~~bash
-IB_CORE=$(echo "options ib_core netns_mode=0" | base64 -w 0)
+$ IB_CORE=$(echo "options ib_core netns_mode=0" | base64 -w 0)
 ~~~
 
 ~~~bash
-cat <<EOF > 99-worker-ib-core-netns.yaml
+$ cat <<EOF > 99-worker-ib-core-netns.yaml
 apiVersion: machineconfiguration.openshift.io/v1
 kind: MachineConfig
 metadata:
@@ -142,7 +144,7 @@ EOF
 Create the machine configuration on the cluster.  This will cause nodes to reboot in a rolling fashion and can be monitored with `oc get mcp`.
 
 ~~~bash
-oc create -f 99-worker-ib-core-netns.yaml 
+$ oc create -f 99-worker-ib-core-netns.yaml 
 machineconfig.machineconfiguration.openshift.io/99-worker-ib-core-netns created
 ~~~
 
@@ -187,7 +189,7 @@ apiVersion: machineconfiguration.openshift.io/v1
 kind: MachineConfig
 metadata:
    labels:
-     machineconfiguration.openshift.io/role: master # Change to worker when using a real multi-node cluster
+     machineconfiguration.openshift.io/role: worker
    name: 99-machine-config-udev-network
 spec:
    config:
@@ -322,11 +324,7 @@ sriov-network-config-daemon-ql4cl         1/1     Running   0          49s
 sriov-network-operator-5995bb94f6-qbsgd   1/1     Running   0          18m
 ~~~
 
-Finally patch the sriovoperatorconfig to work with the NVIDIA Network Operator and DOCA/MOFED. Note if the nodes are workers instead of masters and workers switch to workers in node role.
-
-~~~bash
-oc patch sriovoperatorconfig default --type=merge -n openshift-sriov-network-operator --patch '{ "spec": { "configDaemonNodeSelector": { "network.nvidia.com/operator.mofed.wait": "false", "node-role.kubernetes.io/worker": "", "feature.node.kubernetes.io/pci-15b3.sriov.capable": "true" } } }'
-~~~
+At this point we can move onto the next section of the document.
 
 ## Configuring NMState Operator
 
