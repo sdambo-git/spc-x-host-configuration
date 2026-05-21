@@ -15,7 +15,7 @@
 - [Configuring NVIDIA Network Operator](#configuring-nvidia-network-operator)
 - [Configuring NVIDIA Maintenance Operator](#configuring-nvidia-maintenance-operator)
 - [Configuring Nic Firmware](#configuring-nic-firmware)
-- [Configuring NVIDIA GPU Operator](#configuring-nvidia-network-operator)
+- [Configuring NVIDIA GPU Operator](#configuring-nvidia-gpu-operator)
 - [Configuring LLDPD Daemonset](#configuring-lldpd-daemonset)
 - [Configuring OVS Offload](#configuring-ovs-offload)
 - [Configure Physical Rail Interface Attributes](#configure-physical-rail-interface-attributes)
@@ -663,6 +663,8 @@ NAME                                                      READY   STATUS    REST
 maintenance-operator-controller-manager-995859f88-vq262   1/1     Running   0          18h
 ~~~
 
+If everything looks good we can move onto the next section.
+
 ## Configuring Nic Firmware
 
 NVIDIA NIC Configuration Operator provides Kubernetes API(Custom Resource Definition) to allow FW configuration on Nvidia NICs in a coordinated manner. It deploys, based on settings in the NicClusterPolicy, a configuration daemon on each of the desired nodes to configure Nvidia NICs there. NVIDIA NIC Configuration Operator uses the Maintenance Operator to prepare a node for maintenance before the actual configuration.
@@ -691,12 +693,15 @@ nicfirmwaresource.configuration.net.nvidia.com/spc-x-doca-pcc created
 In the logs of the Nic Configuration Operator pod we can confirm the download is working by seeing the following.
 
 ~~~bash
-2025-10-31T18:50:42.283077413Z	INFO	firmware/provisioning.go:509	Cache directory is missing metadata file, removing it	{"cacheDir": "/nic-firmware/spc-x-doca-pcc/bfb"}
-2025-10-31T18:50:42.285847653Z	INFO	firmware/provisioning.go:558	Downloading a file	{"cacheDir": "/nic-firmware/spc-x-doca-pcc/bfb", "url": "https://content.mellanox.com/BlueField/BFBs/Ubuntu22.04/bf-bundle-3.1.0-76_25.07_ubuntu-22.04_prod.bfb"}
-2025-10-31T18:50:42.285867557Z	LEVEL(-2)	firmware/utils.go:72	FirmwareUtils.DownloadFile()	{"url": "https://content.mellanox.com/BlueField/BFBs/Ubuntu22.04/bf-bundle-3.1.0-76_25.07_ubuntu-22.04_prod.bfb", "destPath": "/nic-firmware/spc-x-doca-pcc/bfb/bf-bundle-3.1.0-76_25.07_ubuntu-22.04_prod.bfb"}
-2025-10-31T18:51:26.941575957Z	LEVEL(-2)	firmware/provisioning.go:574	File downloaded and validated	{"path": "/nic-firmware/spc-x-doca-pcc/bfb/bf-bundle-3.1.0-76_25.07_ubuntu-22.04_prod.bfb"}
-2025-10-31T18:51:26.941824053Z	INFO	firmware/provisioning.go:275	Writing metadata file to disk	{"cacheDir": "/nic-firmware/spc-x-doca-pcc/bfb", "metadata": {"https://content.mellanox.com/BlueField/BFBs/Ubuntu22.04/bf-bundle-3.1.0-76_25.07_ubuntu-22.04_prod.bfb":"bf-bundle-3.1.0-76_25.07_ubuntu-22.04_prod.bfb"}}
-2025-10-31T18:51:26.943203797Z	INFO	firmware/provisioning.go:587	File successfully processed	{"cacheName": "/nic-firmware/spc-x-doca-pcc/bfb", "url": "https://content.mellanox.com/BlueField/BFBs/Ubuntu22.04/bf-bundle-3.1.0-76_25.07_ubuntu-22.04_prod.bfb", "filename": "bf-bundle-3.1.0-76_25.07_ubuntu-22.04_prod.bfb"}
+$ oc logs -f -n nvidia-network-operator nic-configuration-operator-687fc9cc6-cwb77
+2026-05-21T23:09:03.518133057Z	LEVEL(-2)	controller/nicfirmwaresource_controller.go:51	reconciling NicFirmwareSource object	{"name": "spc-x-doca-pcc"}
+2026-05-21T23:09:03.518184621Z	LEVEL(-2)	firmware/provisioning.go:86	FirmwareProvisioner.IsFWStorageAvailable()
+2026-05-21T23:09:03.52714696Z	INFO	firmware/provisioning.go:538	File already present, skipping download	{"cacheDir": "/nic-firmware/spc-x-doca-pcc/bfb", "url": "https://content.mellanox.com/BlueField/FW-Bundle/bf-fwbundle-3.3.0-202_26.01-prod.bfb", "file": "bf-fwbundle-3.3.0-202_26.01-prod.bfb"}
+2026-05-21T23:09:03.527579916Z	LEVEL(-2)	firmware/utils.go:265	FirmwareUtils.GetFWVersionsFromBFB()	{"bfbPath": "/nic-firmware/spc-x-doca-pcc/bfb/bf-fwbundle-3.3.0-202_26.01-prod.bfb"}
+2026-05-21T23:09:03.527603393Z	LEVEL(-2)	firmware/utils.go:269	Extracting info-v0 file from BFB	{"bfbPath": "/nic-firmware/spc-x-doca-pcc/bfb/bf-fwbundle-3.3.0-202_26.01-prod.bfb"}
+2026-05-21T23:09:03.628919936Z	LEVEL(-2)	firmware/utils.go:294	Extracting versions from info-v0 file	{"bfbPath": "/nic-firmware/spc-x-doca-pcc/bfb/bf-fwbundle-3.3.0-202_26.01-prod.bfb"}
+2026-05-21T23:09:03.636804715Z	LEVEL(-2)	firmware/utils.go:305	GetFWVersionsFromBFB(): Version is empty or not found, skipping	{"name": "BF4_NIC_FW"}
+2026-05-21T23:09:03.636856373Z	INFO	controller/nicfirmwaresource_controller.go:229	BFB file successfully processed	{"cacheName": "spc-x-doca-pcc", "filename": ""}
 ~~~
 
 The NicFirmwareTemplate file will instruct the Nic Configuration Operator on what network cards it should update and with what firmware source defined.
@@ -737,11 +742,10 @@ $ oc create -f fwtemplate.yaml
 nicfirmwaretemplate.configuration.net.nvidia.com/spectrum-x-configuration created
 ~~~
 
-We can see in the logs 
+Let's tail the logs again of the `nic-configuration-operator` pod again.
 
 ~~~bash
-$ oc logs nic-configuration-operator-569d6d6f5b-9njf2 -n nvidia-network-operator
-
+$ oc logs -f -n nvidia-network-operator nic-configuration-operator-687fc9cc6-cwb77
 2026-01-07T07:57:45.554318301Z	LEVEL(-2)	controller/nicfirmwaretemplate_controller.go:61	Listed templates	{"templates": [{"kind":"NicFirmwareTemplate","apiVersion":"configuration.net.nvidia.com/v1alpha1","metadata":{"name":"spectrum-x-configuration","namespace":"nvidia-network-operator","uid":"92c6f791-4551-4b99-92ef-1a8d70d6b245","resourceVersion":"72316629","generation":1,"creationTimestamp":"2025-12-31T10:07:08Z","labels":{"machineconfiguration.openshift.io/role":"worker"},"managedFields":[{"manager":"kubectl-create","operation":"Update","apiVersion":"configuration.net.nvidia.com/v1alpha1","time":"2025-12-31T10:07:08Z","fieldsType":"FieldsV1","fieldsV1":{"f:metadata":{"f:labels":{".":{},"f:machineconfiguration.openshift.io/role":{}}},"f:spec":{".":{},"f:nicSelector":{".":{},"f:nicType":{},"f:pciAddresses":{}},"f:nodeSelector":{},"f:template":{".":{},"f:nicFirmwareSourceRef":{},"f:updatePolicy":{}}}}},{"manager":"manager","operation":"Update","apiVersion":"configuration.net.nvidia.com/v1alpha1","time":"2025-12-31T10:07:09Z","fieldsType":"FieldsV1","fieldsV1":{"f:status":{".":{},"f:nicDevices":{}}},"subresource":"status"}]},"spec":{"nicSelector":{"nicType":"a2dc","pciAddresses":["0000:18:00.0","0000:1a:00.0","0000:3a:00.0","0000:4d:00.0","0000:5d:00.0","0000:9b:00.0","0000:ba:00.0","0000:ca:00.0","0000:cc:00.0","0000:db:00.0"]},"template":{"nicFirmwareSourceRef":"spc-x-doca-pcc","updatePolicy":"Update"}},"status":{"nicDevices":["dell-h200-3-a2dc-vn0kk4nrfcbnv48b63k3","dell-h200-3-a2dc-vn0kk4nrfcbnv48b63fv","dell-h200-3-a2dc-vn0kk4nrfcbnv48b63bk","dell-h200-3-a2dc-vn0kk4nrfcbnv48u600r","dell-h200-2-a2dc-vn0kk4nrfcbnv48b63ch","dell-h200-2-a2dc-vn0kk4nrfcbnv48b63fz","dell-h200-3-a2dc-vn0kk4nrfcbnv48b63ek","dell-h200-2-a2dc-vn0kk4nrfcbnv495604l","dell-h200-2-a2dc-vn0kk4nrfcbnv495600m","dell-h200-2-a2dc-vn0kk4nrfcbnv495603b","dell-h200-2-a2dc-vn0kk4nrfcbnv48b63jr","dell-h200-2-a2dc-vn0kk4nrfcbnv48b63jt","dell-h200-3-a2dc-vn0kk4nrfcbnv48b63jw","dell-h200-3-a2dc-vn0kk4nrfcbnv48b63j5","dell-h200-3-a2dc-vn0kk4nrfcbnv48b63dz","dell-h200-3-a2dc-vn0kk4nrfcbnv48b63ka","dell-h200-3-a2dc-vn0kk4nrfcbnv48b63es","dell-h200-2-a2dc-vn0kk4nrfcbnv495600o","dell-h200-2-a2dc-vn0kk4nrfcbnv48b637k","dell-h200-2-a2dc-vn0kk4nrfcbnv48b63f3"]}}]}
 2026-01-07T07:57:45.554427606Z	LEVEL(-2)	controller/template_matcher.go:51	Listed devices	{"count": 24}
 2026-01-07T07:57:45.554584216Z	LEVEL(-2)	controller/template_matcher.go:59	Listed nodes	{"count": 5}
@@ -752,10 +756,9 @@ $ oc logs nic-configuration-operator-569d6d6f5b-9njf2 -n nvidia-network-operator
 2026-01-07T07:57:45.55464101Z	LEVEL(-2)	controller/nicfirmwaretemplate_controller.go:104	Applying template spectrum-x-configuration to device dell-h200-3-a2dc-vn0kk4nrfcbnv48u600r
 2026-01-07T07:57:45.554645877Z	LEVEL(-2)	controller/nicfirmwaretemplate_controller.go:104	Applying template spectrum-x-configuration to device dell-h200-2-a2dc-vn0kk4nrfcbnv48b63ch
 2026-01-07T07:57:45.554650203Z	LEVEL(-2)	controller/nicfirmwaretemplate_controller.go:104	Applying template spectrum-x-configuration to device dell-h200-2-a2dc-vn0kk4nrfcbnv48b63fz
-
 ~~~
 
-The NicConfigurationTemplate file will instruct the Nic Configuration Operator how to configure the network cards  
+The NicConfigurationTemplate file will instruct the Nic Configuration Operator how to configure the network cards for Spectrum-X.
 
 ~~~bash
 $ cat <<EOF > configtemplate.yaml 
@@ -788,8 +791,11 @@ spec:
       version: RA2.1
 EOF
 ~~~
-Now look at the nic configuration operator log again you will see
+
+Let's tail the logs again of the `nic-configuration-operator` pod again.
+
 ~~~bash
+$ oc logs -f -n nvidia-network-operator nic-configuration-operator-687fc9cc6-cwb77
 2026-05-06T09:23:10.177271187Z	LEVEL(-2)	controller/nicconfigurationtemplate_controller.go:126	Applying template spc-x-config to device dell-h200-3-a2dc-vn0kk4nrfcbnv48b63dz
 2026-05-06T09:23:10.177287008Z	LEVEL(-2)	controller/nicconfigurationtemplate_controller.go:126	Applying template spc-x-config to device dell-h200-3-a2dc-vn0kk4nrfcbnv48b63ek
 2026-05-06T09:23:10.177293925Z	LEVEL(-2)	controller/nicconfigurationtemplate_controller.go:126	Applying template spc-x-config to device dell-h200-3-a2dc-vn0kk4nrfcbnv48b63fv
@@ -808,20 +814,9 @@ Now look at the nic configuration operator log again you will see
 2026-05-06T09:23:10.376169565Z	LEVEL(-2)	controller/nicconfigurationtemplate_controller.go:126	Applying template spc-x-config to device dell-h200-2-a2dc-vn0kk4nrfcbnv48b63f3
 ~~~
 
+If everything looks good we can move onto the next section.
+
 ## Configuring NVIDIA GPU Operator
-## Note! In case you need to re-install the GPU operator!
-In this case you probably will encounter with CrashLoopBackOff pods of nvidia-driver-daemonset.the way to solve it is to add the following fix to the GPU cluster policy.
-~~~bash
-driver:
-  manager:
-    repository: ghcr.io/nvidia
-    image: k8s-driver-manager
-    version: ae3f46db
-~~~
-enter each node and remove the nvidia_fs loaded module by running
-~~~bash
-rmmod nvidia_fs
-~~~
 
 The NVIDIA GPU Operator is installed but we need to create a GPU cluster policy custom resource file like the one below.
 
@@ -924,7 +919,7 @@ spec:
     enabled: true
     image: nvidia-fs
     repository: nvcr.io/nvidia/cloud-native
-    version: 2.26.6
+    version: 2.27.3
   vgpuManager:
     enabled: false
   vfioManager:
@@ -942,22 +937,32 @@ $ oc create -f gpu-cluster-policy.yaml
 clusterpolicy.nvidia.com/gpu-cluster-policy created
 ~~~
 
-Validate the pods are running.
+Then let's validate the pods are all running.  
 
 ~~~bash
 $ oc get pods -n nvidia-gpu-operator
-NAME                                           READY   STATUS      RESTARTS       AGE
-gpu-feature-discovery-mpqfp                    1/1     Running     0              17h
-gpu-operator-787dc9685f-g9lgj                  1/1     Running     9              2d20h
-nvidia-container-toolkit-daemonset-qvb5c       1/1     Running     0              17h
-nvidia-cuda-validator-7gzsk                    0/1     Completed   0              17h
-nvidia-dcgm-exporter-2w6ff                     1/1     Running     0              17h
-nvidia-dcgm-hclt7                              1/1     Running     0              17h
-nvidia-device-plugin-daemonset-mdkzm           1/1     Running     0              17h
-nvidia-driver-daemonset-9.6.20250925-0-42fxk   4/4     Running     33 (17h ago)   2d19h
-nvidia-mig-manager-s6mtv                       1/1     Running     0              17h
-nvidia-node-status-exporter-n2kkh              1/1     Running     6              2d19h
-nvidia-operator-validator-4b5zx                1/1     Running     0              17h
+NAME                                           READY   STATUS      RESTARTS      AGE
+gpu-feature-discovery-8lp24                    1/1     Running     0             4m14s
+gpu-feature-discovery-9schj                    1/1     Running     0             4m44s
+gpu-operator-646fb4476b-lkffh                  1/1     Running     0             4h43m
+nvidia-container-toolkit-daemonset-766vl       1/1     Running     0             4m44s
+nvidia-container-toolkit-daemonset-89mjj       1/1     Running     0             4m14s
+nvidia-cuda-validator-6kltl                    0/1     Completed   0             103s
+nvidia-cuda-validator-wfxk2                    0/1     Completed   0             69s
+nvidia-dcgm-exporter-6h22n                     1/1     Running     2 (74s ago)   4m44s
+nvidia-dcgm-exporter-cn2cp                     0/1     Running     2 (39s ago)   4m14s
+nvidia-dcgm-t2hc6                              1/1     Running     0             4m14s
+nvidia-dcgm-vgvxt                              1/1     Running     0             4m44s
+nvidia-device-plugin-daemonset-9l75p           1/1     Running     0             4m14s
+nvidia-device-plugin-daemonset-ct7sg           1/1     Running     0             4m44s
+nvidia-driver-daemonset-9.6.20260510-0-pg4wj   4/4     Running     0             4m51s
+nvidia-driver-daemonset-9.6.20260510-0-xmtk6   4/4     Running     0             4m51s
+nvidia-mig-manager-hdbfv                       1/1     Running     0             26s
+nvidia-mig-manager-sqqpn                       1/1     Running     0             26s
+nvidia-node-status-exporter-cr56n              1/1     Running     0             4m48s
+nvidia-node-status-exporter-sk5ww              1/1     Running     0             4m48s
+nvidia-operator-validator-98clm                1/1     Running     0             4m14s
+nvidia-operator-validator-nsd9d                1/1     Running     0             4m44s
 ~~~
 
 Validate that `nvidia-smi` reponds and kernel modules are loaded.
@@ -985,6 +990,7 @@ Fri Oct 31 16:04:06 2025
 |=========================================================================================|
 |  No running processes found                                                             |
 +-----------------------------------------------------------------------------------------+
+
 sh-5.1# lsmod|grep nvidia
 nvidia_fs             303104  0
 nvidia_modeset       1949696  0
@@ -995,6 +1001,18 @@ nvidia_cspmu           40960  0
 arm_cspmu_module       32768  1 nvidia_cspmu
 drm                   684032  5 drm_kms_helper,ast,drm_shmem_helper,nvidia
 ~~~
+
+### Note! In case you need to re-install the GPU operator!
+In this case you probably will encounter with CrashLoopBackOff pods of nvidia-driver-daemonset.the way to solve it is to add the following fix to the GPU cluster policy.
+~~~bash
+driver:
+  manager:
+    repository: ghcr.io/nvidia
+    image: k8s-driver-manager
+    version: ae3f46db
+~~~
+
+If everything looks good we can move onto the next section.
 
 ## Configuring LLDPD Daemonset
 
