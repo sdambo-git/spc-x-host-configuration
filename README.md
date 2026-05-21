@@ -27,7 +27,7 @@
 
 ## Environment
 
-The host environment for this document was a 5 node cluster where the control plane was virtualized and the two worker nodes were Dell H200s running OpenShift 4.20 & 4.21 with Local Volume Storage Operator already configured.  The NFD, SR-IOV, NMState, NVIDIA Network, NVIDIA Maintenance and NVIDIA GPU operators were all installed but need to be configured.
+The host environment for this document was a 5 node cluster where the control plane was virtualized and the two worker nodes were Dell XE9680 H200s running OpenShift 4.20 & 4.21 with Local Volume Storage Operator already configured.  The NFD, SR-IOV, NMState, NVIDIA Network, NVIDIA Maintenance and NVIDIA GPU operators were all installed but need to be configured.
 
 <img src="spx.jpg" style="width: 1000px;" border=0/>
 
