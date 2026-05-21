@@ -27,7 +27,9 @@
 
 ## Environment
 
-The host environment for this document was a single GH200 node running OpenShift 4.20 with Local Volume Storage Operator already configured.  The NFD, SR-IOV, NMState, NVIDIA Network, NVIDIA Maintenance and NVIDIA GPU operators were all installed but need to be configured.
+The host environment for this document was a 5 node cluster where the control plane was virtualized and the two worker nodes were Dell H200s running OpenShift 4.20 & 4.21 with Local Volume Storage Operator already configured.  The NFD, SR-IOV, NMState, NVIDIA Network, NVIDIA Maintenance and NVIDIA GPU operators were all installed but need to be configured.
+
+<img src="spx.jpg" style="width: 1000px;" border=0/>
 
 ## Set Core User Password for Troubleshooting
 
@@ -80,7 +82,7 @@ Before completing this section make sure to test that it is possible to login as
 
 ## Set Hugepages and IOMMU off
 
-We need to set hughpages and iommu.  This can be achieved with the following machine configuration.
+Now we need to enable a few kernel arguments which include the blacklisting of irdma, hugepages and enabling iommu.  This can be achieved by generating the following machine configuration.
 
 ~~~bash
 $ cat <<EOF > 99-machineconfig-kernel-args-hugepages.yaml
@@ -102,7 +104,7 @@ spec:
 EOF
 ~~~
 
-Create the machine configuration on the cluster.  This will cause nodes to reboot in a rolling fashion and can be monitored with `oc get mcp`.
+Using the file we generated above we can create the machine configuration on the cluster.  This will cause nodes to reboot in a rolling fashion and can be monitored with `oc get mcp`.
 
 ~~~bash
 $ oc create -f 99-machineconfig-kernel-args-hugepages.yaml
@@ -113,11 +115,13 @@ To validate this has been configured we can use `dmesg` output and `oc describe 
 
 ## Set RDMA Subsystem Namespace Awareness
 
-enable RDMA device namespace separation, which is essential for proper resource isolation in containerized environments.
+Next we need to enable RDMA device namespace separation, which is essential for proper namespace resource isolation in containerized environments.  First we need to base64 encode the contents of our ib_core.conf file.
 
 ~~~bash
 $ IB_CORE=$(echo "options ib_core netns_mode=0" | base64 -w 0)
 ~~~
+
+Once we have the base64 encoding assigned to the variable we can generate the machine configuration yaml that will be used to create the file on the workers in the cluster.
 
 ~~~bash
 $ cat <<EOF > 99-worker-ib-core-netns.yaml
@@ -141,12 +145,14 @@ spec:
 EOF
 ~~~
 
-Create the machine configuration on the cluster.  This will cause nodes to reboot in a rolling fashion and can be monitored with `oc get mcp`.
+Now we can create the machine configuration on the cluster.  This will cause nodes to reboot in a rolling fashion and can be monitored with `oc get mcp`.
 
 ~~~bash
 $ oc create -f 99-worker-ib-core-netns.yaml 
 machineconfig.machineconfiguration.openshift.io/99-worker-ib-core-netns created
 ~~~
+
+Once all the workers have rebooted and the `oc get mcp` no longer indicates it updating we can continue on to the next section.
 
 ## Set UDEV Rules for Rail Device Names
 
@@ -216,16 +222,21 @@ machineconfig.machineconfiguration.openshift.io/99-machine-config-udev-network c
 Once the machine configuration has been successfully applied we can validate that its applied by spot checking nodes in a debug pod to confirm the interface names have been set appropriately.
 
 ~~~bash
-$ oc debug node/nvd-srv-36.nvidia.eng.rdu2.dc.redhat.com
-Starting pod/nvd-srv-36nvidiaengrdu2dcredhatcom-debug-v4x47 ...
+$ oc debug node/dell-h200-2
+Starting pod/dell-h200-2-debug-pq95j ...
 To use host binaries, run `chroot /host`. Instead, if you need to access host namespaces, run `nsenter -a -t 1`.
-Pod IP: 10.6.135.15
+Pod IP: 10.14.202.16
 If you don't see a command prompt, try pressing enter.
 sh-5.1# chroot /host
 sh-5.1# ip link|grep rail
-5: eth_rail0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc mq state UP mode DEFAULT group default qlen 1000
-6: eth_rail1: <NO-CARRIER,BROADCAST,MULTICAST,UP> mtu 1500 qdisc mq state DOWN mode DEFAULT group default qlen 1000
-sh-5.1#
+4: eth_rail0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc mq state UP mode DEFAULT group default qlen 1000
+6: eth_rail1: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc mq state UP mode DEFAULT group default qlen 1000
+7: eth_rail2: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc mq state UP mode DEFAULT group default qlen 1000
+8: eth_rail3: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc mq state UP mode DEFAULT group default qlen 1000
+11: eth_rail4: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc mq state UP mode DEFAULT group default qlen 1000
+12: eth_rail5: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc mq state UP mode DEFAULT group default qlen 1000
+15: eth_rail6: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc mq state UP mode DEFAULT group default qlen 1000
+17: eth_rail7: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc mq state UP mode DEFAULT group default qlen 1000
 ~~~
 
 ## Configuring NFD Operator
@@ -275,12 +286,18 @@ Finally we can validate our instance is up and running by again looking at the p
 
 ~~~bash
 $ oc get pods -n openshift-nfd
-NAME                                     READY   STATUS    RESTARTS   AGE
-nfd-controller-manager-f4fc58bb4-k5fq2   1/1     Running   7          4d23h
-nfd-gc-676786b846-6kpcz                  1/1     Running   6          4d23h
-nfd-master-75fcc46558-b49jl              1/1     Running   6          4d23h
-nfd-worker-l6jc6                         1/1     Running   7          6d5h
+NAME                                      READY   STATUS    RESTARTS   AGE
+nfd-controller-manager-6679c598b9-skbsm   1/1     Running   0          46m
+nfd-gc-64d68c6fcf-6mgqx                   1/1     Running   0          8m1s
+nfd-master-7977c86865-sgtrw               1/1     Running   0          8m1s
+nfd-worker-4pf44                          1/1     Running   0          8m1s
+nfd-worker-8z4rt                          1/1     Running   0          8m1s
+nfd-worker-m7pfc                          1/1     Running   0          8m1s
+nfd-worker-r2fhd                          1/1     Running   0          8m1s
+nfd-worker-svcg6                          1/1     Running   0          8m1s
 ~~~
+
+If everything looks good we can continue onto the next section of the document.
 
 ## Configuring SRIOV Operator
 
