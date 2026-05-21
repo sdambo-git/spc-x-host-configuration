@@ -1002,16 +1002,6 @@ arm_cspmu_module       32768  1 nvidia_cspmu
 drm                   684032  5 drm_kms_helper,ast,drm_shmem_helper,nvidia
 ~~~
 
-### Note! In case you need to re-install the GPU operator!
-In this case you probably will encounter with CrashLoopBackOff pods of nvidia-driver-daemonset.the way to solve it is to add the following fix to the GPU cluster policy.
-~~~bash
-driver:
-  manager:
-    repository: ghcr.io/nvidia
-    image: k8s-driver-manager
-    version: ae3f46db
-~~~
-
 If everything looks good we can move onto the next section.
 
 ## Configuring LLDPD Daemonset
