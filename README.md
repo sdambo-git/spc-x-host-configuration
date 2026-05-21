@@ -1,6 +1,6 @@
 # Spectrum-X Host Configuration on OpenShift
 
-**Goal**: The goal of this document is to document completely the steps to getting a host ready for Spectrum-X.
+**Goal**: The goal of this document is to document the configuration steps to make OpenShift worker nodes configured for Spectrum-X Single Plane.
 
 ## Workflow Sections
 
@@ -301,7 +301,7 @@ If everything looks good we can continue onto the next section of the document.
 
 ## Configuring SRIOV Operator
 
-We need to create the default SriovOperatorConfig custom resource file.
+Now we need to generate the default SriovOperatorConfig custom resource file.  The below example in used ensuring we have enabled the manageSoftwareBridges and also disabled the need to wait for the DOCA Mofed containers.
 
 ~~~bash
 $ cat <<EOF > sriov-operator-config.yaml 
@@ -323,10 +323,10 @@ spec:
 EOF
 ~~~
 
-Then we need to create it on our cluster.
+With the file generated we need to create it on our cluster.
 
 ~~~bash
-$ oc create -f sriov-operator-config.yaml 
+$ oc create -f sriov-operator-config.yaml
 sriovoperatorconfig.sriovnetwork.openshift.io/default created
 ~~~
 
@@ -335,13 +335,16 @@ Validate that the pods are running.
 ~~~bash
 $ oc get pods -n openshift-sriov-network-operator
 NAME                                      READY   STATUS    RESTARTS   AGE
-network-resources-injector-m4t8k          1/1     Running   0          49s
-operator-webhook-w9k8n                    1/1     Running   0          49s
-sriov-network-config-daemon-ql4cl         1/1     Running   0          49s
-sriov-network-operator-5995bb94f6-qbsgd   1/1     Running   0          18m
+network-resources-injector-2b54p          1/1     Running   0          14s
+network-resources-injector-549w4          1/1     Running   0          14s
+network-resources-injector-s88cn          1/1     Running   0          14s
+operator-webhook-gkmmk                    1/1     Running   0          14s
+operator-webhook-lgrqt                    1/1     Running   0          14s
+operator-webhook-wd2rt                    1/1     Running   0          14s
+sriov-network-operator-6f7db94664-wn4f7   1/1     Running   0          69m
 ~~~
 
-At this point we can move onto the next section of the document.
+If everything looks good we can move onto the next section of the document.
 
 ## Configuring NMState Operator
 
@@ -369,19 +372,25 @@ Finally we will validate the instance is running.
 
 ~~~bash
 $ oc get pods -n openshift-nmstate
-NAME                                     READY   STATUS    RESTARTS   AGE
-nmstate-console-plugin-8dcf98f9b-stx5x   0/1     Running   0          10s
-nmstate-handler-zwhpt                    0/1     Running   0          10s
-nmstate-metrics-767cb6c678-bx5ln         1/2     Running   0          10s
-nmstate-operator-78777d7db8-5frht        1/1     Running   0          21m
-nmstate-webhook-676f7797c4-h4nl6         0/1     Running   0          10s
+NAME                                      READY   STATUS    RESTARTS   AGE
+nmstate-console-plugin-856fbff988-f8bpb   0/1     Running   0          10s
+nmstate-handler-2vw4j                     0/1     Running   0          11s
+nmstate-handler-5rr4b                     1/1     Running   0          11s
+nmstate-handler-5xtbx                     1/1     Running   0          11s
+nmstate-handler-8wnx9                     1/1     Running   0          11s
+nmstate-handler-fb9hz                     1/1     Running   0          11s
+nmstate-metrics-6d46df498c-mnr5t          1/2     Running   0          11s
+nmstate-operator-d7769b64b-s8sg6          1/1     Running   0          73m
+nmstate-webhook-684cbf4bc8-dkmk6          0/1     Running   0          11s
 ~~~
 
 We will configure NNCP policies at a later point in this document.
 
 ## Configuring NVIDIA Network Operator
 
-With the NVIDIA Network operator up we need to create the NicClusterPolicy custom resource file. Note in this file there are values coded for my environment.  For example the `nic-fw-storage-pvc` is a persistent volume claim I have precreated in my environment using NFS. You need to have NFS share prior to running the NicClusterPolicy , after that create a PV and PVC to use the NFS share.
+With the NVIDIA Network operator up we need to create the NicClusterPolicy custom resource file. The NicClusterPolicy contains all the sub-components that NVIDA Network Operator can deploy.  It is used to deploy DOCA MOFED, Spectrum-X Operator and Nic Configuration Operator.  
+
+However before we can setup our NicClusterPolicy we need to create a persistent volume claim for the Nic firmware to reside which will be referenced in our NicClusterPolicy.   The example below for `nic-fw-storage-pvc` is a persistent volume claim using an existing NFS server. The NFS server could be a share from any NFS location just adjust to fit the environment where this is being deployed.
 
 ~~~bash
 $ cat <<EOF > nfs-pv.yaml
@@ -400,11 +409,23 @@ spec:
     path: /home/nfs-share/nic-fw-storage
 EOF
 ~~~
-Now we need to create the PVC file , but before this we need to create nvidia-network-operator namespace
+
+With the persistent volume file generated we can now create it on the cluster.
 
 ~~~bash
-oc create namespace nvidia-network-operator
+$ oc create -f nfs-pv.yaml
+persistentvolume/nfs-nic-fw-storage created
 ~~~
+
+We can validate the persistent volume is in place by the following.
+
+~~~bash
+$ oc get pv
+NAME                 CAPACITY   ACCESS MODES   RECLAIM POLICY   STATUS      CLAIM   STORAGECLASS   VOLUMEATTRIBUTESCLASS   REASON   AGE
+nfs-nic-fw-storage   10Gi       RWX            Retain           Available                          <unset>                          3s
+~~~
+
+Next we will need to create a persistent volume claim to bind to the peristent volume we created above.   The file will look similar to the one below.
 
 ~~~bash
 $ cat <<EOF > nfs-pvc.yaml
@@ -422,14 +443,23 @@ spec:
   volumeName: nfs-nic-fw-storage
 EOF
 ~~~
-Lets check that the PVC is bound to the PV
+
+Now we can create the persistent volume claim.
 
 ~~~bash
-oc get pvc -n nvidia-network-operator
-NAME                 STATUS   VOLUME               CAPACITY   ACCESS MODES   STORAGECLASS   VOLUMEATTRIBUTESCLASS   AGE
-nic-fw-storage-pvc   Bound    nfs-nic-fw-storage   10Gi       RWX                           <unset>                 21s
+$ oc create -f nfs-pvc.yaml
+persistentvolumeclaim/nic-fw-storage-pvc created
 ~~~
-Now we should create the nic cluster policy
+
+We can validate the volume is bound by the following.
+
+~~~bash
+$ oc get pvc -n nvidia-network-operator
+NAME                 STATUS   VOLUME               CAPACITY   ACCESS MODES   STORAGECLASS   VOLUMEATTRIBUTESCLASS   AGE
+nic-fw-storage-pvc   Bound    nfs-nic-fw-storage   10Gi       RWX                           <unset>                 13s
+~~~
+
+Now we can generate the NicClusterPolicy for our cluster.
 
 ~~~bash
 $ cat <<EOF > ncp-spectrumx.yaml
@@ -518,17 +548,36 @@ We can validate the NicClusterPolicy by looking at the running pods.
 
 ~~~bash
 $ oc get pods -n nvidia-network-operator
-NAME                                                              READY   STATUS    RESTARTS   AGE
-mofed-rhel9.6-7f8f74fb56-ds-xkjdv                                 2/2     Running   0          6m12s
-nic-configuration-daemon-lkbc8                                    1/1     Running   0          6m11s
-nic-configuration-operator-5cb54c5c89-lhbk7                       1/1     Running   0          6m11s
-nvidia-network-operator-controller-manager-cb54ffcc-k44dz         1/1     Running   0          8m1s
-spectrum-x-flowcontroller-w9wf9                                   1/1     Running   0          6m11s
+NAME                                                          READY   STATUS    RESTARTS   AGE
+mofed-rhel9.6-bf9699c58-ds-5wbpr                              2/2     Running   0          5m3s
+mofed-rhel9.6-bf9699c58-ds-79qkd                              2/2     Running   0          5m3s
+nic-configuration-daemon-25pbl                                1/1     Running   0          59s
+nic-configuration-daemon-fxs7b                                1/1     Running   0          62s
+nic-configuration-operator-687fc9cc6-cwb77                    1/1     Running   0          5m1s
+nv-ipam-controller-6649d985b5-6499q                           1/1     Running   0          5m2s
+nv-ipam-controller-6649d985b5-dtvrp                           1/1     Running   0          5m2s
+nv-ipam-node-5zhm6                                            1/1     Running   0          5m2s
+nv-ipam-node-6llj7                                            1/1     Running   0          5m2s
+nv-ipam-node-d6mxg                                            1/1     Running   0          5m2s
+nv-ipam-node-nb745                                            1/1     Running   0          5m2s
+nv-ipam-node-p9lvd                                            1/1     Running   0          5m2s
+nvidia-network-operator-controller-manager-5b9f9dd668-n7262   1/1     Running   0          6m35s
+spectrum-x-flowcontroller-448jw                               1/1     Running   0          5m
+spectrum-x-flowcontroller-8fvts                               1/1     Running   0          5m
 ~~~
+
+If everything looks good we can move onto the next section of the documentation.
 
 ## Configuring NVIDIA Maintenance Operator
 
-Now we need to configure the `MaintenanceOperatorConfig` custom resource file.  In this file we can specify the log level, the number of parallel operations (ie how many nodes to take offline at once) and the time the node is kept in maintenance (a number in seconds that provides enough time for the maintenance work to happen before the operator will remove the node maintenance policy).  In our example we are just going to allow one maintenance operation at a time and that operation has 300 seconds to finish before the node is returned to schedulable.
+NVIDIA Maintenance Operator provides Kubernetes API(Custom Resource Definition) to allow node maintenance operators in K8s cluster in a coordinated manner. It performs some common operations to prepare a node for maintenance such as cordoning the node as well as draining it.  Users/Consumers can request to perform maintenance on a node by creating NodeMaintenance custom resource. The operator will then reconcile NodeMaintenance custom resources with the following flow:
+
+* Scheduling of NodeMaintenance to be processed by the operator, taking into account constraints such as the maximal allowed parallel operations.
+* Node preparation for maintenance such as cordon and draining of the node
+* Mark NodeMaintenance as Ready (via condition)
+* Cleanup on deletion of NodeMaintenance such as node uncordon
+
+To start the installation we need to generate the following namespace, operatorgroup and subscription file.
 
 ~~~bash
 $ cat <<EOF > node-maintenance-operator.yaml
@@ -560,6 +609,10 @@ spec:
   startingCSV: nvidia-maintenance-operator.v0.2.3
 EOF
 ~~~
+
+We can then create this on the cluster to start the operator.
+
+Now we need to configure the `MaintenanceOperatorConfig` custom resource file.  In this file we can specify the log level, the number of parallel operations (ie how many nodes to take offline at once) and the time the node is kept in maintenance (a number in seconds that provides enough time for the maintenance work to happen before the operator will remove the node maintenance policy).  In our example we are just going to allow one maintenance operation at a time and that operation has 300 seconds to finish before the node is returned to schedulable.
 
 ~~~bash
 $ cat <<EOF > maintenance-operator-config.yaml
