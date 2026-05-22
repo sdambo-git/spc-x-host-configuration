@@ -1885,6 +1885,87 @@ NCCL version 2.30.4+cuda13.2
 #
 ~~~
 
+Here is another test where we ran all test types.
+
+~~~bash
+# mpirun --allow-run-as-root -H 10.131.0.30:1,10.128.2.20:1 -np 2 -bind-to none -map-by slot -x NCCL_IB_GID_INDEX=3 -x NCCL_IB_TC=96 -x NCCL_IB_HCA=mlx5_ -x NCCL_IB_ADAPTIVE_ROUTING=1 -x NCCL_IB_SPLIT_DATA_ON_QPS=0 -x NCCL_IBEXT_DISABLE=0 -x UCX_IB_GID_INDEX=3 -x UCX_TLS=tcp -x UCC_CLS=basic -x UCC_TLS=ucp,self,sm -x UCC_TL_NCCL_TUNE=0 -x UCC_TL_UCP_TUNE=allgather:@0 -x HYDRA_FULL_ERROR=1 -x NCCL_DEBUG=warn -x NCCL_IB_QPS_PER_CONNECTION=2 -x NCCL_P2P_NET_CHUNKSIZE=524288 -x NCCL_MIN_NCHANNELS=32 -mca btl tcp,self -mca btl_tcp_if_include net1,net2,net3,net4,net5,net6,net7,net8 -mca plm_rsh_args "-p 20024" all_reduce_perf --ngpus 8 --minbytes 10G --maxbytes 48G --stepfactor 2 --stepbytes 1M --op sum --datatype all --root 0 --iters 100 --warmup_iters 50 --agg_iters 1 --average 1 --parallel_init 0 --check 1 --blocking 0 --cudagraph 0
+Warning: Permanently added '[10.128.2.20]:20024' (ED25519) to the list of known hosts.
+[1779464407.212356] [nvidiatools-dell-h200-2-workload:8738 :0]          parser.c:2305 UCX  WARN  unused environment variable: UCX_IB_GID_INDEX
+[1779464407.212356] [nvidiatools-dell-h200-2-workload:8738 :0]          parser.c:2305 UCX  WARN  (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1779464407.217919] [nvidiatools-dell-h200-3-workload:6474 :0]          parser.c:2305 UCX  WARN  unused environment variable: UCX_IB_GID_INDEX
+[1779464407.217919] [nvidiatools-dell-h200-3-workload:6474 :0]          parser.c:2305 UCX  WARN  (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+# nccl-tests version 2.18.3 nccl-headers=23004 nccl-library=23004
+# Collective test starting: all_reduce_perf
+# nThread 1 nGpus 8 minBytes 10737418240 maxBytes 51539607552 step: 2(factor) warmup iters: 50 iters: 100 agg iters: 1 validation: 1 graph: 0 unalign: 0
+#
+# Using devices
+#  Rank  0 Group  0 Pid   8738 on nvidiatools-dell-h200-2-workload device  0 [0000:1b:00] NVIDIA H200
+#  Rank  1 Group  0 Pid   8738 on nvidiatools-dell-h200-2-workload device  1 [0000:3c:00] NVIDIA H200
+#  Rank  2 Group  0 Pid   8738 on nvidiatools-dell-h200-2-workload device  2 [0000:4b:00] NVIDIA H200
+#  Rank  3 Group  0 Pid   8738 on nvidiatools-dell-h200-2-workload device  3 [0000:5c:00] NVIDIA H200
+#  Rank  4 Group  0 Pid   8738 on nvidiatools-dell-h200-2-workload device  4 [0000:9a:00] NVIDIA H200
+#  Rank  5 Group  0 Pid   8738 on nvidiatools-dell-h200-2-workload device  5 [0000:bb:00] NVIDIA H200
+#  Rank  6 Group  0 Pid   8738 on nvidiatools-dell-h200-2-workload device  6 [0000:cd:00] NVIDIA H200
+#  Rank  7 Group  0 Pid   8738 on nvidiatools-dell-h200-2-workload device  7 [0000:dc:00] NVIDIA H200
+#  Rank  8 Group  0 Pid   6474 on nvidiatools-dell-h200-3-workload device  0 [0000:1b:00] NVIDIA H200
+#  Rank  9 Group  0 Pid   6474 on nvidiatools-dell-h200-3-workload device  1 [0000:3c:00] NVIDIA H200
+#  Rank 10 Group  0 Pid   6474 on nvidiatools-dell-h200-3-workload device  2 [0000:4b:00] NVIDIA H200
+#  Rank 11 Group  0 Pid   6474 on nvidiatools-dell-h200-3-workload device  3 [0000:5c:00] NVIDIA H200
+#  Rank 12 Group  0 Pid   6474 on nvidiatools-dell-h200-3-workload device  4 [0000:9a:00] NVIDIA H200
+#  Rank 13 Group  0 Pid   6474 on nvidiatools-dell-h200-3-workload device  5 [0000:bb:00] NVIDIA H200
+#  Rank 14 Group  0 Pid   6474 on nvidiatools-dell-h200-3-workload device  6 [0000:cd:00] NVIDIA H200
+#  Rank 15 Group  0 Pid   6474 on nvidiatools-dell-h200-3-workload device  7 [0000:dc:00] NVIDIA H200
+#
+# Reducing maxBytes to 48247057066 due to memory limitation
+NCCL version 2.30.4+cuda13.2
+#
+#                                                              out-of-place                       in-place          
+#       size         count      type   redop    root     time   algbw   busbw  #wrong     time   algbw   busbw  #wrong 
+#        (B)    (elements)                               (us)  (GB/s)  (GB/s)             (us)  (GB/s)  (GB/s)         
+ 10737418240   10737418240      int8     sum      -1  51702.1  207.68  389.40       0  51698.8  207.69  389.42       0
+ 21474836480   21474836480      int8     sum      -1   103274  207.94  389.89       0   105387  203.77  382.07       0
+ 42949672960   42949672960      int8     sum      -1   206424  208.07  390.12       0   206415  208.07  390.14       0
+ 10737418240   10737418240     uint8     sum      -1  51692.2  207.72  389.47       0  51681.4  207.76  389.55       0
+ 21474836480   21474836480     uint8     sum      -1   103259  207.97  389.94       0   103261  207.97  389.94       0
+ 42949672960   42949672960     uint8     sum      -1   206445  208.04  390.08       0   206450  208.04  390.07       0
+ 10737418240    2684354560     int32     sum      -1  44436.1  241.64  453.07       0  44344.7  242.14  454.00       0
+ 21474836480    5368709120     int32     sum      -1  88601.0  242.38  454.46       0  88765.7  241.93  453.61       0
+ 42949672960   10737418240     int32     sum      -1   176592  243.21  456.03       0   177156  242.44  454.57       0
+ 10737418240    2684354560    uint32     sum      -1  44357.5  242.07  453.87       0  44348.2  242.12  453.97       0
+ 21474836480    5368709120    uint32     sum      -1  88433.3  242.84  455.32       0  88510.2  242.63  454.92       0
+ 42949672960   10737418240    uint32     sum      -1   176908  242.78  455.21       0   177427  242.07  453.88       0
+ 10737418240    1342177280     int64     sum      -1  46246.1  232.18  435.34       0  46241.0  232.21  435.39       0
+ 21474836480    2684354560     int64     sum      -1  92185.1  232.95  436.79       0  92188.1  232.95  436.77       0
+ 42949672960    5368709120     int64     sum      -1   184428  232.88  436.65       0   184241  233.12  437.09       0
+ 10737418240    1342177280    uint64     sum      -1  46219.7  232.31  435.59       0  46170.6  232.56  436.05       0
+ 21474836480    2684354560    uint64     sum      -1  92258.0  232.77  436.44       0  92272.2  232.73  436.38       0
+ 42949672960    5368709120    uint64     sum      -1   184572  232.70  436.31       0   184885  232.30  435.57       0
+ 10737418240    5368709120      half     sum      -1  41741.4  257.24  482.32       0  41751.2  257.18  482.21       0
+ 21474836480   10737418240      half     sum      -1  83292.3  257.82  483.42       0  83322.2  257.73  483.25       0
+ 42949672960   21474836480      half     sum      -1   166562  257.86  483.49       0   166300  258.27  484.25       0
+ 10737418240    2684354560     float     sum      -1  41549.0  258.43  484.55       0  41440.0  259.11  485.83       0
+ 21474836480    5368709120     float     sum      -1  82622.9  259.91  487.34       0  82725.0  259.59  486.74       0
+ 42949672960   10737418240     float     sum      -1   165340  259.77  487.06       0   164958  260.37  488.19       0
+ 10737418240    1342177280    double     sum      -1  43419.4  247.30  463.68       0  43379.6  247.52  464.10       0
+ 21474836480    2684354560    double     sum      -1  86366.3  248.65  466.22       0  86304.8  248.83  466.55       0
+ 42949672960    5368709120    double     sum      -1   172357  249.19  467.23       0   172309  249.26  467.36       0
+ 10737418240    5368709120  bfloat16     sum      -1  41790.4  256.93  481.75       0  41731.4  257.30  482.43       0
+ 21474836480   10737418240  bfloat16     sum      -1  83301.7  257.80  483.37       0  83303.5  257.79  483.36       0
+ 42949672960   21474836480  bfloat16     sum      -1   166329  258.22  484.17       0   166459  258.02  483.79       0
+ 10737418240   10737418240    f8e4m3     sum      -1  55722.7  192.69  361.30       0  55771.5  192.53  360.98       0
+ 21474836480   21474836480    f8e4m3     sum      -1   111120  193.26  362.36       0   113415  189.35  355.03       0
+ 42949672960   42949672960    f8e4m3     sum      -1   223065  192.54  361.02       0   221602  193.81  363.40       0
+ 10737418240   10737418240    f8e5m2     sum      -1  55699.2  192.78  361.45       0  55692.9  192.80  361.49       0
+ 21474836480   21474836480    f8e5m2     sum      -1   110926  193.60  362.99       0   110920  193.61  363.01       0
+ 42949672960   42949672960    f8e5m2     sum      -1   221331  194.05  363.85       0   221569  193.84  363.46       0
+# Out of bounds values : 0 OK
+# Avg bus bandwidth    : 433.477 
+#
+# Collective test concluded: all_reduce_perf
+#
+
+~~~
+
 If everything checks out we should have a peek busbw over the actual line rate.  In our cluster the line rate is 400GB/s and from the results above we can see the last few iterations were above ~480G/s.   However if those numbers are lower for example below ~400GB/s then there are a few things we can check to ensure we have our setup configured correctly.
 
 First check that ATS_ENABLED is set to zero which implies disabled.
