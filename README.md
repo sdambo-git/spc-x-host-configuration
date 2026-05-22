@@ -1094,7 +1094,7 @@ $ oc patch sriovoperatorconfigs.sriovnetwork.openshift.io -n openshift-sriov-net
 sriovoperatorconfig.sriovnetwork.openshift.io/default patched
 ~~~
 
-In OpenShift we can achieve OVS offload by creating an SriovNetworkPoolConfig and apply it to node.  Note this will not work on a SNO node it seems.
+In OpenShift we can achieve OVS offload by creating an SriovNetworkPoolConfig and apply it to node.
 
 ~~~bash
 $ cat <<EOF > sriovnetworkpoolconfig-offload.yaml
@@ -1115,6 +1115,15 @@ Create the SriovNetworkPoolConfig on the cluster.
 ~~~bash
 $ oc create -f sriovnetworkpoolconfig-offload.yaml 
 sriovnetworkpoolconfig.sriovnetwork.openshift.io/sriovnetworkpoolconfig-offload created
+~~~
+
+This will cause the workers to reboot in a rolling fashion and we can confirm the process is complete by watching the status of the machineconfigpool.
+
+~~~bash
+$ oc get mcp
+NAME     CONFIG                                             UPDATED   UPDATING   DEGRADED   MACHINECOUNT   READYMACHINECOUNT   UPDATEDMACHINECOUNT   DEGRADEDMACHINECOUNT   AGE
+master   rendered-master-9f028b0737d9b35b1721d7161f551b66   True      False      False      3              3                   3                     0                      23h
+worker   rendered-worker-77c9855c7cbe337cda661338e0fbd4fa   False     True       False      2              0                   0                     0                      23h
 ~~~
 
 Verify that offload is set to true under other_config.
@@ -1147,9 +1156,44 @@ system_type         : rhel
 system_version      : "9.6"
 ~~~
 
+If everything looks good we can move onto the next section.
+
 ## Configure Physical Rail Interface Attributes
 
-We can provide those same settings via a SriovNetworkNodePolicy for each rail interface.  An example of the policy which provides the `switchdev` mode, mtu and vfs count is below.
+The physical rail attributes will be configured in two ways first at the physical interface with NodeNetworkConfigurationPolicy and then at the virtual function interface via the SriovNetworkNodePolicy.   First for each rail, which normally will be 0-7, we need to configure a NodeNetworkConfigurationPolicy for each rail.  The following example for rail0 is below the only difference for each rail will be the rail name.
+
+~~~bash
+$ cat <<EOF > nncp-mtu-rail0.yaml
+apiVersion: nmstate.io/v1
+kind: NodeNetworkConfigurationPolicy
+metadata:
+  name: nncp-mtu-rail0
+spec:
+  nodeSelector:
+    node-role.kubernetes.io/worker: ''
+  desiredState:
+    interfaces:
+    - name: eth_rail0
+      description: mtu 9216 eth_rail0 
+      type: ethernet 
+      state: up 
+      mtu: 9216
+EOF
+~~~
+
+Create the NodeNetworkConfigurationPolicy policy on the cluster.
+
+~~~bash
+
+~~~
+
+Repeat for each rail and then validate at the end.
+
+~~~bash
+
+~~~
+
+Now we need to provide some settings via a SriovNetworkNodePolicy for each rail interface.  An example of the policy which provides the `switchdev` mode, mtu and vfs count is below.
 
 ~~~bash
 $ cat <<EOF > snnp-eth-rail0.yaml
@@ -1176,7 +1220,6 @@ spec:
   resourceName: eth_rail0
 EOF
 ~~~
-
 
 Once we generate the SriovNetworkNodePolicy we can create it on the cluster.  We will repeat this for each rail.
 
@@ -1275,8 +1318,7 @@ oc create -f ovsnetwork-eth-rail0.yaml
 
 ## Solve missing kernel modules in NIC Configuration Daemon 
 
-There is an issue that we can see in NIC Configuration Daemon logs, that fwctl.ko and mlx5_fwctl.ko modules arn't loaded on the worker nods in order for dms client commands to work ,In order to solve it we should load them using machine config.
-generate the base64 
+There is an issue that we can see in NIC Configuration Daemon logs, that fwctl.ko and mlx5_fwctl.ko modules aren't loaded on the worker nodes in order for client commands to work.  In order to workaround this issue we will use a systemd one shot script that will load the module for us.  The first step is to generate the base64 encoding of the script.
 
 ~~~bash
 FWCTL_SCRIPT=$(base64 -w0 << 'EOF'
@@ -1298,7 +1340,7 @@ EOF
 )
 ~~~
 
-create the machine config
+Now we can generate the machineconfig file that will substitute in the kernel module variable (FWCTL_SCRIPT) into the machineconfig.
 
 ~~~bash
 cat <<EOF > mc-load-fwctl.yaml
@@ -1345,11 +1387,13 @@ spec:
           WantedBy=timers.target
 EOF
 ~~~
-Create the machine config on the cluster we can create it on the cluster. We will repeat this for each rail.
+
+Now we can create the machineconfig on the cluster.
 
 ~~~bash
 $ oc create -f mc-load-fwctl.yaml
 ~~~
+
 We can monitor the progress of the machine configuration using the `oc get mcp` command.
 
 ## Validate Spectrum-X Topology
