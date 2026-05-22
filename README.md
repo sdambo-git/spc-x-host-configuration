@@ -1006,6 +1006,8 @@ If everything looks good we can move onto the next section.
 
 ## Configuring LLDPD Daemonset
 
+In networking infrastructure, LLDP (Link Layer Discovery Protocol) is utilized to automate the discovery and configuration of NVIDIA Spectrum-X fabrics, ensuring optimal performance for large-scale AI and machine learning (ML) workloads
+
 To run our lldpd container daemonset we will need to provide a service account with privilege access similar to what we do with NMState.   The first step is to create a service account we will simply call lldp.  In this example I am creating it under the nvidia-network-operator namespace.  First craft the custom resource file.
 
 ~~~bash
@@ -1056,7 +1058,7 @@ spec:
       hostNetwork: true
       containers:
         - name: lldpd-container
-          image: quay.io/redhat_emp1/ecosys-nvidia/lldpd-arm64:0.0.5
+          image: quay.io/redhat_emp1/ecosys-nvidia/lldpd:0.0.5
           securityContext:
             privileged: true
 EOF
@@ -1073,9 +1075,15 @@ We can validate it is running by looking at the pods in the nvidia-network-opera
 
 ~~~bash
 $ oc get pods -n nvidia-network-operator -l app=lldpd -o wide
-NAME                    READY   STATUS    RESTARTS   AGE     IP            NODE                                       NOMINATED NODE   READINESS GATES
-lldpd-container-hhslt   1/1     Running   0          4m42s   10.6.135.15   nvd-srv-36.nvidia.eng.rdu2.dc.redhat.com   <none>           <none>
+NAME                    READY   STATUS    RESTARTS   AGE   IP             NODE              NOMINATED NODE   READINESS GATES
+lldpd-container-2tbjw   1/1     Running   0          62s   10.6.135.235   nvd-srv-45-vm-6   <none>           <none>
+lldpd-container-4lkms   1/1     Running   0          62s   10.14.202.17   dell-h200-3       <none>           <none>
+lldpd-container-d7wm5   1/1     Running   0          62s   10.6.135.237   nvd-srv-45-vm-5   <none>           <none>
+lldpd-container-s4c56   1/1     Running   0          62s   10.14.202.16   dell-h200-2       <none>           <none>
+lldpd-container-zqnvf   1/1     Running   0          62s   10.6.135.218   nvd-srv-45-vm-4   <none>           <none>
 ~~~
+
+If evertything looks okay we can move onto the next section.
 
 ## Configuring OVS Offload
 
