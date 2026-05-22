@@ -20,7 +20,7 @@
 - [Configuring OVS Offload](#configuring-ovs-offload)
 - [Configure Physical Rail Interface Attributes](#configure-physical-rail-interface-attributes)
 - [Configure Spectrum-X CNI](#configure-spectrum-x-CNI)
-- [Solve missing kernel modules in NIC Configuration Daemon](#Solve-missing-kernel-modules-in-NIC-Configuration-Daemon)
+- [FWCTL Kernel Module Required for NIC Configuration Daemon](#fwctl-kernel-module-required-for-nic-configuration-daemon)
 - [Validate Spectrum-X Topology](#validate-spectrum-x-topology)
 - [Performance Testing and Troubleshooting](#performance-testing-and-troubleshooting)
 
@@ -1129,27 +1129,27 @@ worker   rendered-worker-77c9855c7cbe337cda661338e0fbd4fa   False     True      
 Verify that offload is set to true under other_config.
 
 ~~~bash
-$ oc debug node/nvd-srv-29.nvidia.eng.rdu2.dc.redhat.com
-Starting pod/nvd-srv-29nvidiaengrdu2dcredhatcom-debug-v66nq ...
-To use host binaries, run `chroot /host`
-Pod IP: 10.6.135.8
+$ oc debug node/dell-h200-2
+Starting pod/dell-h200-2-debug-hwqfw ...
+To use host binaries, run `chroot /host`. Instead, if you need to access host namespaces, run `nsenter -a -t 1`.
+Pod IP: 10.14.202.16
 If you don't see a command prompt, try pressing enter.
 sh-5.1# chroot /host
 sh-5.1# ovs-vsctl list open_vswitch
-_uuid               : 78300d8c-9134-4ae4-8d47-066a11492e23
-bridges             : [6dcbfd65-cb12-44de-8954-efe2256529e4, 9b9b41ba-22c6-4c50-a2cf-0a403816af48]
-cur_cfg             : 2733
+_uuid               : 0a3b72c0-00ef-445c-8d8b-93918f7f6c17
+bridges             : [b44af939-dc93-4c17-b32e-7b6c4e9a0435, ecf5ba76-472e-4e9d-a6f6-08bb6fb15d45]
+cur_cfg             : 194
 datapath_types      : [netdev, system]
-datapaths           : {system=5154b9d6-3ffa-43f8-9f92-2b7c81fd86fa}
+datapaths           : {system=2e7e40b1-d90b-46dc-bacb-bf778b7973fe}
 db_version          : "8.8.0"
 dpdk_initialized    : false
-dpdk_version        : "DPDK 24.11.2"
-external_ids        : {hostname=nvd-srv-29.nvidia.eng.rdu2.dc.redhat.com, ovn-bridge-mappings="physnet:br-ex", ovn-bridge-remote-probe-interval="0", ovn-enable-lflow-cache="true", ovn-encap-ip="10.6.135.8", ovn-encap-type=geneve, ovn-is-interconn="true", ovn-memlimit-lflow-cache-kb="1048576", ovn-monitor-all="true", ovn-ofctrl-wait-before-clear="0", ovn-remote="unix:/var/run/ovn/ovnsb_db.sock", ovn-remote-probe-interval="180000", ovn-set-local-ip="true", rundir="/var/run/openvswitch", system-id="bac2184b-58eb-48f2-b517-4bd623f21a30"}
+dpdk_version        : "DPDK 24.11.3"
+external_ids        : {hostname=dell-h200-2, ovn-bridge-mappings="physnet:br-ex", ovn-bridge-remote-probe-interval="0", ovn-enable-lflow-cache="true", ovn-encap-ip="10.14.202.16", ovn-encap-type=geneve, ovn-is-interconn="true", ovn-memlimit-lflow-cache-kb="1048576", ovn-monitor-all="true", ovn-ofctrl-wait-before-clear="0", ovn-remote="unix:/var/run/ovn/ovnsb_db.sock", ovn-remote-probe-interval="180000", ovn-set-local-ip="true", rundir="/var/run/openvswitch", system-id="64c38ac6-5510-4626-9977-03d0be2d5d76"}
 iface_types         : [bareudp, erspan, geneve, gre, gtpu, internal, ip6erspan, ip6gre, lisp, patch, srv6, stt, system, tap, vxlan]
 manager_options     : []
-next_cfg            : 2733
-other_config        : {bundle-idle-timeout="0", hw-offload="true", ovn-chassis-idx-bac2184b-58eb-48f2-b517-4bd623f21a30="", vlan-limit="0"}
-ovs_version         : "3.5.2-33.el9fdp"
+next_cfg            : 194
+other_config        : {bundle-idle-timeout="0", hw-offload="true", ovn-chassis-idx-64c38ac6-5510-4626-9977-03d0be2d5d76="", vlan-limit="0"}
+ovs_version         : "3.5.2-72.el9fdp"
 ssl                 : []
 statistics          : {}
 system_type         : rhel
@@ -1184,13 +1184,37 @@ EOF
 Create the NodeNetworkConfigurationPolicy policy on the cluster.
 
 ~~~bash
-
+$ oc create -f nncp-mtu-rail0.yaml
+nodenetworkconfigurationpolicy.nmstate.io/nncp-mtu-rail0 created
+$ oc create -f nncp-mtu-rail1.yaml
+nodenetworkconfigurationpolicy.nmstate.io/nncp-mtu-rail1 created
+$ oc create -f nncp-mtu-rail2.yaml
+nodenetworkconfigurationpolicy.nmstate.io/nncp-mtu-rail2 created
+$ oc create -f nncp-mtu-rail3.yaml
+nodenetworkconfigurationpolicy.nmstate.io/nncp-mtu-rail3 created
+$ oc create -f nncp-mtu-rail4.yaml
+nodenetworkconfigurationpolicy.nmstate.io/nncp-mtu-rail4 created
+$ oc create -f nncp-mtu-rail5.yaml
+nodenetworkconfigurationpolicy.nmstate.io/nncp-mtu-rail5 created
+$ oc create -f nncp-mtu-rail6.yaml
+nodenetworkconfigurationpolicy.nmstate.io/nncp-mtu-rail6 created
+$ oc create -f nncp-mtu-rail7.yaml
+nodenetworkconfigurationpolicy.nmstate.io/nncp-mtu-rail7 created
 ~~~
 
 Repeat for each rail and then validate at the end.
 
 ~~~bash
-
+$ oc get nncp
+NAME             STATUS      REASON
+nncp-mtu-rail0   Available   SuccessfullyConfigured
+nncp-mtu-rail1   Available   SuccessfullyConfigured
+nncp-mtu-rail2   Available   SuccessfullyConfigured
+nncp-mtu-rail3   Available   SuccessfullyConfigured
+nncp-mtu-rail4   Available   SuccessfullyConfigured
+nncp-mtu-rail5   Available   SuccessfullyConfigured
+nncp-mtu-rail6   Available   SuccessfullyConfigured
+nncp-mtu-rail7   Available   SuccessfullyConfigured
 ~~~
 
 Now we need to provide some settings via a SriovNetworkNodePolicy for each rail interface.  An example of the policy which provides the `switchdev` mode, mtu and vfs count is below.
@@ -1224,8 +1248,22 @@ EOF
 Once we generate the SriovNetworkNodePolicy we can create it on the cluster.  We will repeat this for each rail.
 
 ~~~bash
-$ oc create -f snnp-eth-rail0.yaml
+$ oc create -f sriovnetworknodepolicy-eth-rail0.yaml
 sriovnetworknodepolicy.sriovnetwork.openshift.io/eth-rail0 created
+$ oc create -f sriovnetworknodepolicy-eth-rail1.yaml
+sriovnetworknodepolicy.sriovnetwork.openshift.io/eth-rail1 created
+$ oc create -f sriovnetworknodepolicy-eth-rail2.yaml
+sriovnetworknodepolicy.sriovnetwork.openshift.io/eth-rail2 created
+$ oc create -f sriovnetworknodepolicy-eth-rail3.yaml
+sriovnetworknodepolicy.sriovnetwork.openshift.io/eth-rail3 created
+$ oc create -f sriovnetworknodepolicy-eth-rail4.yaml
+sriovnetworknodepolicy.sriovnetwork.openshift.io/eth-rail4 created
+$ oc create -f sriovnetworknodepolicy-eth-rail5.yaml
+sriovnetworknodepolicy.sriovnetwork.openshift.io/eth-rail5 created
+$ oc create -f sriovnetworknodepolicy-eth-rail6.yaml
+sriovnetworknodepolicy.sriovnetwork.openshift.io/eth-rail6 created
+$ oc create -f sriovnetworknodepolicy-eth-rail7.yaml
+sriovnetworknodepolicy.sriovnetwork.openshift.io/eth-rail7 created
 ~~~
 
 We can validate the configuration by using a `debug` pod and checking the values.  In this example we used emp55s0np0 as our test interface.
@@ -1246,13 +1284,13 @@ eth_rail7 (0000:db:00.0): pci/0000:db:00.0: mode switchdev inline-mode none enca
 Removing debug pod ...
 ~~~
 
-This completes the physical interface confguration section.
+If everything looks good we can move onto the next section.
 
 ## Configure Spectrum-X CNI
 
-The next thing we need to configure is the Spectrum-X CNI.  This is composed of two components: nv-ipam CIDRPool and an OVSNetwork.   These configuration files will need to be created for each rail interface in the system.   
+The next thing we need to configure is the Spectrum-X CNI.  This is composed of two components: nv-ipam CIDRPool and an OVSNetwork.   These configuration files will need to be created for each rail interface on the cluster.  
 
-The nv-ipam CIDRPool looks similar to the following example.  Please adjust the ipaddressing and nodeName information to match the environment and create one for each rail interface.
+The nv-ipam CIDRPool looks similar to the following example for rail0.  What changes in each rail configuration is the second octet which will increment by two.  This will give use a setup where rail0 is 172.16, rail1 is 172.18, rail2 is 172.20 so on and so forth.
 
 ~~~bash
 $ cat <<EOF > cidrpool_rail0.yaml
@@ -1281,8 +1319,37 @@ EOF
 Once we generate the CIDRPool we can create it on the cluster. We will repeat this for each rail.
 
 ~~~bash
-$ oc create -f cidrpool_rail0.yaml 
+$ oc create -f cidrpool_rail0.yaml
 cidrpool.nv-ipam.nvidia.com/eth-rail0 created
+$ oc create -f cidrpool_rail1.yaml
+cidrpool.nv-ipam.nvidia.com/eth-rail1 created
+$ oc create -f cidrpool_rail2.yaml
+cidrpool.nv-ipam.nvidia.com/eth-rail2 created
+$ oc create -f cidrpool_rail3.yaml
+cidrpool.nv-ipam.nvidia.com/eth-rail3 created
+$ oc create -f cidrpool_rail4.yaml
+cidrpool.nv-ipam.nvidia.com/eth-rail4 created
+$ oc create -f cidrpool_rail5.yaml
+cidrpool.nv-ipam.nvidia.com/eth-rail5 created
+$ oc create -f cidrpool_rail6.yaml
+cidrpool.nv-ipam.nvidia.com/eth-rail6 created
+$ oc create -f cidrpool_rail7.yaml
+cidrpool.nv-ipam.nvidia.com/eth-rail7 created
+~~~
+
+We can validate the cidrpools with the following:
+
+~~~bash
+$ oc get CIDRpool -n nvidia-network-operator
+NAME        CIDR            GATEWAY INDEX   PER NODE NETWORK PREFIX
+eth-rail0   172.16.0.0/15   0               31
+eth-rail1   172.18.0.0/15   0               31
+eth-rail2   172.20.0.0/15   0               31
+eth-rail3   172.22.0.0/15   0               31
+eth-rail4   172.24.0.0/15   0               31
+eth-rail5   172.26.0.0/15   0               31
+eth-rail6   172.28.0.0/15   0               31
+eth-rail7   172.30.0.0/15   0               31
 ~~~
 
 The OVSNetwork custom resource file looks similar to the following example.   Each rail will require a OVSNetwork configuration.
@@ -1313,10 +1380,54 @@ EOF
 Again once we create The OVSNetwork custom resource file we can create it on the cluster. We will repeat this for each rail.
 
 ~~~bash
-oc create -f ovsnetwork-eth-rail0.yaml
+$ oc create -f ovsnetwork-eth-rail0.yaml
+ovsnetwork.sriovnetwork.openshift.io/eth-rail0 created
+$ oc create -f ovsnetwork-eth-rail1.yaml
+ovsnetwork.sriovnetwork.openshift.io/eth-rail1 created
+$ oc create -f ovsnetwork-eth-rail2.yaml
+ovsnetwork.sriovnetwork.openshift.io/eth-rail2 created
+$ oc create -f ovsnetwork-eth-rail3.yaml
+ovsnetwork.sriovnetwork.openshift.io/eth-rail3 created
+$ oc create -f ovsnetwork-eth-rail4.yaml
+ovsnetwork.sriovnetwork.openshift.io/eth-rail4 created
+$ oc create -f ovsnetwork-eth-rail5.yaml
+ovsnetwork.sriovnetwork.openshift.io/eth-rail5 created
+$ oc create -f ovsnetwork-eth-rail6.yaml
+ovsnetwork.sriovnetwork.openshift.io/eth-rail6 created
+$ oc create -f ovsnetwork-eth-rail7.yaml
+ovsnetwork.sriovnetwork.openshift.io/eth-rail7 created
 ~~~
 
-## Solve missing kernel modules in NIC Configuration Daemon 
+We can confirm the ovsnetwork is created and also its associated network-attachment-definitions with the following.
+
+~~~bash
+$ oc get ovsnetwork -n openshift-sriov-network-operator
+NAME        AGE
+eth-rail0   2m3s
+eth-rail1   2m1s
+eth-rail2   119s
+eth-rail3   117s
+eth-rail4   115s
+eth-rail5   112s
+eth-rail6   110s
+eth-rail7   108s
+
+$ oc get network-attachment-definitions -A
+NAMESPACE                  NAME        AGE
+default                    eth-rail0   2m13s
+default                    eth-rail1   2m11s
+default                    eth-rail2   2m9s
+default                    eth-rail3   2m7s
+default                    eth-rail4   2m5s
+default                    eth-rail5   2m2s
+default                    eth-rail6   2m
+default                    eth-rail7   118s
+openshift-ovn-kubernetes   default     24h
+~~~
+
+If everything looks okay we can move onto the next section.
+
+## FWCTL Kernel Module Required for NIC Configuration Daemon 
 
 There is an issue that we can see in NIC Configuration Daemon logs, that fwctl.ko and mlx5_fwctl.ko modules aren't loaded on the worker nodes in order for client commands to work.  In order to workaround this issue we will use a systemd one shot script that will load the module for us.  The first step is to generate the base64 encoding of the script.
 
@@ -1343,7 +1454,7 @@ EOF
 Now we can generate the machineconfig file that will substitute in the kernel module variable (FWCTL_SCRIPT) into the machineconfig.
 
 ~~~bash
-cat <<EOF > mc-load-fwctl.yaml
+$ cat <<EOF > mc-load-fwctl.yaml
 apiVersion: machineconfiguration.openshift.io/v1
 kind: MachineConfig
 metadata:
@@ -1392,9 +1503,49 @@ Now we can create the machineconfig on the cluster.
 
 ~~~bash
 $ oc create -f mc-load-fwctl.yaml
+machineconfig.machineconfiguration.openshift.io/99-worker-load-fwctl created
 ~~~
 
-We can monitor the progress of the machine configuration using the `oc get mcp` command.
+We can monitor the progress of the machine configuration using the `oc get mcp` command as the rolling reboot of work nodes happens.
+
+~~~bash
+$ oc get mcp
+NAME     CONFIG                                             UPDATED   UPDATING   DEGRADED   MACHINECOUNT   READYMACHINECOUNT   UPDATEDMACHINECOUNT   DEGRADEDMACHINECOUNT   AGE
+master   rendered-master-9f028b0737d9b35b1721d7161f551b66   True      False      False      3              3                   3                     0                      24h
+worker   rendered-worker-4e2ca91da846af9ed30588933aa55043   False     True       False      2              0                   0                     0                      24h
+~~~
+
+We can then validate the module is loaded by opening a debug pod on the workers and confirm 
+
+~~~bash
+$ oc debug node/dell-h200-2
+Starting pod/dell-h200-2-debug-57tts ...
+To use host binaries, run `chroot /host`. Instead, if you need to access host namespaces, run `nsenter -a -t 1`.
+Pod IP: 10.14.202.16
+If you don't see a command prompt, try pressing enter.
+sh-5.1# chroot /host
+sh-5.1# lsmod|grep fwctl
+mlx5_fwctl             16384  0
+fwctl                  16384  1 mlx5_fwctl
+mlx5_core            3420160  2 mlx5_fwctl,mlx5_ib
+mlx_compat             12288  14 rdma_cm,ib_ipoib,mlxdevm,mlx5_fwctl,iw_cm,ib_umad,mlx5_vdpa,fwctl,ib_core,rdma_ucm,ib_uverbs,mlx5_ib,ib_cm,mlx5_core
+sh-5.1# systemctl status load-fwctl.service
+● load-fwctl.service - Load fwctl kernel modules from MOFED container
+     Loaded: loaded (/etc/systemd/system/load-fwctl.service; disabled; preset: disabled)
+     Active: active (exited) since Fri 2026-05-22 14:06:48 UTC; 11min ago
+TriggeredBy: ● load-fwctl.timer
+    Process: 18301 ExecStart=/usr/local/bin/load-fwctl.sh (code=exited, status=0/SUCCESS)
+   Main PID: 18301 (code=exited, status=0/SUCCESS)
+        CPU: 130ms
+
+May 22 14:06:37 dell-h200-2 systemd[1]: Starting Load fwctl kernel modules from MOFED container...
+May 22 14:06:37 dell-h200-2 load-fwctl.sh[18301]: Found MOFED container: 1f091f93ee7593c6a2fb705772a16927bcd42e8db1a9c39c0758be4292a4e59c
+May 22 14:06:48 dell-h200-2 load-fwctl.sh[18998]: libkmod: kmod_module_get_holders: could not open '/sys/module/mlx5_ib/holders': No such file or directory
+May 22 14:06:48 dell-h200-2 load-fwctl.sh[18301]: fwctl modules loaded successfully
+May 22 14:06:48 dell-h200-2 systemd[1]: Finished Load fwctl kernel modules from MOFED container.
+~~~
+
+At this point if everything looks correct we have completed all the steps in configuring the Openshift cluster properly for Spectrum-X and we can now move onto the validation portion.
 
 ## Validate Spectrum-X Topology
 
