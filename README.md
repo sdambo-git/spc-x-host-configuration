@@ -792,6 +792,13 @@ spec:
 EOF
 ~~~
 
+Now let's create the NicConfigurationTemplate on the cluster.
+
+~~~bash
+$ oc create -f nic-config-template.yaml
+nicconfigurationtemplate.configuration.net.nvidia.com/spc-x-config created
+~~~
+
 Let's tail the logs again of the `nic-configuration-operator` pod again.
 
 ~~~bash
