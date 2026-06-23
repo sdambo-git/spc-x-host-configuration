@@ -428,7 +428,7 @@ nfs-nic-fw-storage   10Gi       RWX            Retain           Available       
 We need to create the `nvidia-network-operator` name space before creating the PVC
 
 ~~~bash
-oc create ns nvidia-network-operator
+$ oc create ns nvidia-network-operator
 ~~~
 
 Next we will need to create a persistent volume claim to bind to the peristent volume we created above.   The file will look similar to the one below.
