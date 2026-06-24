@@ -28,10 +28,60 @@
 ## Environment
 
  The host environment for this document was a 5 node cluster where the control plane was virtualized and the two worker nodes were Dell XE9680 H200s running OpenShift 4.20 & 4.21 with Local Volume Storage Operator already configured.  The NFD, SR-IOV, NMState, NVIDIA Network, NVIDIA Maintenance and NVIDIA GPU operators were all installed but need to be configured.
- 
- Pay attention that in this Version of OCP 4.22, I used some hacking in order to bring the mofed drivers to work on RHEL9.8 
+
+### Issues found in clear OCP 4.22 installation
+
+ On an OpenShift 4.22 cluster with RHCOS 9.8 worker nodes (`5.14.0-687.11.1.el9_8.x86_64` kernel),
+the NVIDIA Network Operator MOFED pods were failing to come up with the following chain of errors:
+
+### Stage 1 — Image pull 403 Forbidden
+The `ofedDriver` in `NicClusterPolicy` pointed to `nvcr.io/nvstaging/mellanox` (a private staging
+registry) but had no `imagePullSecrets` configured. The pods got:
+```
+Failed to pull image "nvcr.io/nvstaging/mellanox/doca-driver:doca3.4.0-26.04-0.5.3.0-0-rhel9.8-amd64":
+received unexpected HTTP status: 403 Forbidden
+```
+
+### Stage 2 — Image tag does not exist (`manifest unknown`)
+After adding the NGC pull secret, the image pulled but the tag
+`doca3.4.0-26.04-0.5.3.0-0-rhel9.8-amd64` **does not exist** in the nvstaging registry.
+The registry only publishes up to `rhel9.6` for this DOCA version.
+
+### Stage 3 — OS not supported during driver compilation
+After overriding the node NFD label to `VERSION_ID=9.6` so the operator would select the
+`rhel9.6` image, the image pulled successfully but the driver compilation failed:
+```
+Current operation system is not supported!
+```
+The MLNX_OFED `install.pl` script auto-detects the host OS as `el9_8` and rejects it because
+the `rhel9.6` source package does not declare support for `el9_8`.
+
+---
+
+## Root Causes
+
+| # | Root Cause |
+|---|---|
+| 1 | `ofedDriver.imagePullSecrets` was empty — NGC staging registry requires auth |
+| 2 | Image tag `rhel9.8` does not exist in `nvcr.io/nvstaging`; only `rhel9.6` is available for DOCA 3.4.0 |
+| 3 | MLNX_OFED `install.pl` rejects the actual node OS (`el9_8`) without a `--distro` override |
+
+---
  
 <img src="spx.jpg" style="width: 1000px;" border=0/>
+
+## Create the NGC staging pull secret
+
+The `nvcr.io/nvstaging` registry requires an NGC API key. Create the secret in the operator
+namespace before applying the policy:
+
+```bash
+kubectl create secret docker-registry ngc-staging-secret \
+  -n nvidia-network-operator \
+  --docker-server=nvcr.io \
+  --docker-username='$oauthtoken' \
+  --docker-password=<YOUR_NGC_API_KEY>
+```
 
 ## Set Core User Password for Troubleshooting
 
