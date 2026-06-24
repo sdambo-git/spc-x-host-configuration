@@ -56,6 +56,9 @@ Current operation system is not supported!
 The MLNX_OFED `install.pl` script auto-detects the host OS as `el9_8` and rejects it because
 the `rhel9.6` source package does not declare support for `el9_8`.
 
+### Stage 4 - NNO is not available in openshift-marketplace / Catalog
+The NNO is still not in the OCP 4.22 catalog. So temporary we should use the OCP 4.21 catalog
+
 ---
 
 ## Root Causes
@@ -97,6 +100,27 @@ ofedDriver:
   imagePullSecrets:
   - ngc-staging-secret
 ```
+## Add OCP 4.21 catalog to OCP 4.22
+
+In order to have Items in Catalog that wasn't released yet, we should use the previous OCP version catalog
+
+~~~bash
+$ cat <<EOF > cat catalogsource-certified-v421.yaml
+apiVersion: operators.coreos.com/v1alpha1
+kind: CatalogSource
+metadata:
+  name: certified-operators-v421
+  namespace: openshift-marketplace
+spec:
+  displayName: Certified Operators 4.21
+  image: registry.redhat.io/redhat/certified-operator-index:v4.21
+  publisher: Red Hat
+  sourceType: grpc
+  updateStrategy:
+    registryPoll:
+      interval: 1h
+EOF
+~~~
 
 ## Set Core User Password for Troubleshooting
 
