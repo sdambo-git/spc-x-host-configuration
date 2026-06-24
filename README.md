@@ -76,11 +76,26 @@ The `nvcr.io/nvstaging` registry requires an NGC API key. Create the secret in t
 namespace before applying the policy:
 
 ```bash
-kubectl create secret docker-registry ngc-staging-secret \
+oc create secret docker-registry ngc-staging-secret \
   -n nvidia-network-operator \
   --docker-server=nvcr.io \
   --docker-username='$oauthtoken' \
   --docker-password=<YOUR_NGC_API_KEY>
+```
+> Replace `<YOUR_NGC_API_KEY>` with your NGC personal API key from
+> [https://org.ngc.nvidia.com/setup/api-key](https://org.ngc.nvidia.com/setup/api-key).
+
+#### Reference the secret in `ncp-spectrumx.yaml`
+
+Add `imagePullSecrets` to the `ofedDriver` spec:
+
+```yaml
+ofedDriver:
+  repository: nvcr.io/nvstaging/mellanox
+  image: doca-driver
+  version: doca3.4.0-26.04-0.5.3.0-0
+  imagePullSecrets:
+  - ngc-staging-secret
 ```
 
 ## Set Core User Password for Troubleshooting
@@ -348,6 +363,53 @@ nfd-worker-m7pfc                          1/1     Running   0          8m1s
 nfd-worker-r2fhd                          1/1     Running   0          8m1s
 nfd-worker-svcg6                          1/1     Running   0          8m1s
 ~~~
+
+### Step 2 — Permanently override the NFD OS version label via NodeFeatureRule
+
+NNO uses the node label `feature.node.kubernetes.io/system-os_release.VERSION_ID` to decide which
+MOFED image variant to deploy. Since `rhel9.8` images do not exist in nvstaging, this label must
+permanently read `9.6` on the RHCOS 9.8 worker nodes.
+
+Node Feature Discovery (NFD) re-sets this label to `9.8` every 60 seconds from the actual OS
+release information. A `NodeFeatureRule` is used to permanently override it — NFD rule labels
+take precedence over raw worker-detected feature labels.
+
+#### Create the NodeFeatureRule
+
+```bash
+oc apply -f - <<'EOF'
+apiVersion: nfd.openshift.io/v1alpha1
+kind: NodeFeatureRule
+metadata:
+  name: override-os-version-id-for-mofed
+  namespace: openshift-nfd
+spec:
+  rules:
+  - name: "pin-rhcos-9.8-nodes-to-rhel9.6-mofed"
+    labels:
+      "feature.node.kubernetes.io/system-os_release.VERSION_ID": "9.6"
+    matchFeatures:
+    - feature: system.osrelease
+      matchExpressions:
+        ID:
+          op: In
+          value:
+          - "rhel"
+        OSTREE_VERSION:
+          op: Exists
+EOF
+```
+
+This rule matches any node where `ID=rhel` **and** `OSTREE_VERSION` exists (exclusive to RHCOS
+nodes) and forces `VERSION_ID=9.6`. It survives node reboots, NFD restarts, and cluster upgrades.
+
+After one NFD cycle (~60 seconds), both nodes will show `VERSION_ID=9.6` and NNO will reconcile
+to deploy the `mofed-rhel9.6` DaemonSet automatically.
+
+> **To revert** when proper `rhel9.8` images are published to nvstaging:
+> ```bash
+> oc delete nodefeaturerule override-os-version-id-for-mofed -n openshift-nfd
+> ```
 
 If everything looks good we can continue onto the next section of the document.
 
