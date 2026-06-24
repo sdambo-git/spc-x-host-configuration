@@ -665,6 +665,110 @@ $ oc create -f ncp-spectrumx.yaml
 nicclusterpolicy.mellanox.com/nic-cluster-policy created
 ~~~
 
+At this stage the mofed pods will fail , we need to proceed with Step 3
+
+### Step 3 — Patch the DOCA driver image entrypoint
+
+The DOCA driver image's `entrypoint.sh` builds `append_driver_build_flags` and injects it into
+the `dtk_nic_driver_build.sh` script (which the `openshift-driver-toolkit-ctr` sidecar executes).
+Adding `--distro rhel9.6` to `set_append_driver_build_flags()` tells `install.pl` to treat the
+node as RHEL 9.6 regardless of the actual OS detection.
+
+#### Pull the original image
+
+```bash
+# Authenticate with the NGC API key from the cluster secret
+NGC_API_KEY=$(oc get secret ngc-staging-secret -n nvidia-network-operator \
+  -o jsonpath='{.data.\.dockerconfigjson}' | base64 -d | \
+  python3 -c "import sys,json; d=json.load(sys.stdin); print(list(d['auths'].values())[0]['password'])")
+
+podman login nvcr.io -u '$oauthtoken' -p "$NGC_API_KEY"
+podman pull nvcr.io/nvstaging/mellanox/doca-driver:doca3.4.0-26.04-0.5.3.0-0-rhel9.6-amd64
+```
+
+#### Extract and patch `entrypoint.sh`
+
+```bash
+mkdir -p /tmp/doca-patched
+podman run --rm --entrypoint cat \
+  nvcr.io/nvstaging/mellanox/doca-driver:doca3.4.0-26.04-0.5.3.0-0-rhel9.6-amd64 \
+  /root/entrypoint.sh > /tmp/doca-patched/entrypoint.sh
+```
+
+Find the `set_append_driver_build_flags()` function and add `--distro rhel9.6`:
+
+```bash
+# Original function:
+function set_append_driver_build_flags() {
+    debug_print "Function: ${FUNCNAME[0]}"
+    if [[ "${ENABLE_NFSRDMA}" = false ]]; then
+        append_driver_build_flags="$append_driver_build_flags --without-mlnx-nfsrdma${pkg_suffix} --without-mlnx-nvme${pkg_suffix}"
+    fi
+}
+
+# Patched function (add the --distro line at the end):
+function set_append_driver_build_flags() {
+    debug_print "Function: ${FUNCNAME[0]}"
+    if [[ "${ENABLE_NFSRDMA}" = false ]]; then
+        append_driver_build_flags="$append_driver_build_flags --without-mlnx-nfsrdma${pkg_suffix} --without-mlnx-nvme${pkg_suffix}"
+    fi
+    append_driver_build_flags="$append_driver_build_flags --distro rhel9.6"
+}
+```
+
+#### Build and push the patched image
+
+Create `/tmp/doca-patched/Dockerfile`:
+```dockerfile
+FROM nvcr.io/nvstaging/mellanox/doca-driver:doca3.4.0-26.04-0.5.3.0-0-rhel9.6-amd64
+COPY entrypoint.sh /root/entrypoint.sh
+RUN chmod +x /root/entrypoint.sh
+```
+
+```bash
+podman build -t quay.io/sdambo/doca-driver:doca3.4.0-26.04-0.5.3.0-1-rhel9.6-amd64 /tmp/doca-patched/
+podman push quay.io/sdambo/doca-driver:doca3.4.0-26.04-0.5.3.0-1-rhel9.6-amd64
+```
+
+> **Note:** The tag uses `-0.5.3.0-1` (build number bumped from `-0` to `-1`) to avoid the nodes
+> using a cached version of the old unpatched `-0` image.
+
+### Step 4 — Update `ncp-spectrumx.yaml`
+
+Switch the `ofedDriver` to use the patched image on `quay.io/sdambo`. Since the repository is
+public, **no `imagePullSecrets` is required**:
+
+```yaml
+ofedDriver:
+  repository: quay.io/sdambo
+  image: doca-driver
+  version: doca3.4.0-26.04-0.5.3.0-1
+  imagePullSecrets: []
+```
+
+Apply:
+```bash
+oc apply -f ncp-spectrumx.yaml
+```
+
+### Step 5 — Apply the NicClusterPolicy
+
+```bash
+oc apply -f ncp-spectrumx.yaml
+```
+
+NNO will reconcile, create the `mofed-rhel9.6` DaemonSet, and begin driver compilation on each
+node. Compilation takes approximately 3–5 minutes per node. Monitor with:
+
+```bash
+oc logs -n nvidia-network-operator -l app=mofed-rhel9.6-<hash> \
+  -c openshift-driver-toolkit-ctr -f
+```
+
+Both pods should reach `2/2 Running` once compilation completes.
+
+---
+
 We can validate the NicClusterPolicy by looking at the running pods.
 
 ~~~bash
@@ -686,6 +790,21 @@ nvidia-network-operator-controller-manager-5b9f9dd668-n7262   1/1     Running   
 spectrum-x-flowcontroller-448jw                               1/1     Running   0          5m
 spectrum-x-flowcontroller-8fvts                               1/1     Running   0          5m
 ~~~
+
+## Reverting the Workaround
+
+When NVIDIA publishes `rhel9.8` images to `nvcr.io/nvstaging` for this DOCA version:
+
+```bash
+# 1. Remove the NFD label override
+oc delete nodefeaturerule override-os-version-id-for-mofed -n openshift-nfd
+
+# 2. Restore the original NicClusterPolicy settings
+#    - repository: nvcr.io/nvstaging/mellanox
+#    - version: doca3.4.0-26.04-0.5.3.0-0
+#    - imagePullSecrets: [ngc-staging-secret]
+oc apply -f ncp-spectrumx.yaml
+```
 
 If everything looks good we can move onto the next section of the documentation.
 
