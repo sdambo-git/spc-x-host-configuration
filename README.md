@@ -100,7 +100,7 @@ ofedDriver:
   imagePullSecrets:
   - ngc-staging-secret
 ```
-## Add OCP 4.21 catalog to OCP 4.22
+## Stage 4 - Add OCP 4.21 catalog to OCP 4.22
 
 In order to have Items in Catalog that wasn't released yet, we should use the previous OCP version catalog
 
