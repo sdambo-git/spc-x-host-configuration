@@ -1719,7 +1719,6 @@ MOD=/lib/modules/${KERN}/extra/mlnx-ofa_kernel/drivers/fwctl
 crictl exec "$CID" insmod ${MOD}/fwctl.ko 2>/dev/null || true
 crictl exec "$CID" insmod ${MOD}/mlx5/mlx5_fwctl.ko
 lsmod | grep -q mlx5_fwctl && echo "fwctl modules loaded successfully" || { echo "Failed to load fwctl"; exit 1; }
-EOF
 ~~~
 
 Create base64 variable from it:
