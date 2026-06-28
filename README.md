@@ -1703,7 +1703,7 @@ If everything looks okay we can move onto the next section.
 There is an issue that we can see in NIC Configuration Daemon logs, that fwctl.ko and mlx5_fwctl.ko modules aren't loaded on the worker nodes in order for client commands to work.  In order to workaround this issue we will use a systemd one shot script that will load the module for us.  The first step is to generate the base64 encoding of the script.
 
 ~~~bash
-cat <<EOF > load-fwctl.sh
+$ cat <<EOF > load-fwctl.sh
 #!/bin/bash
 # Fixed: check MOFED first (exit 1 to retry if not running), then check if module loaded
 CID=$(crictl ps --name mofed-container --state running -q 2>/dev/null | head -1)
@@ -1725,7 +1725,7 @@ EOF
 Create base64 variable from it:
 
 ~~~bash
-FWCTL_SCRIPT=$(base64 -w0 load-fwctl.sh)
+$ FWCTL_SCRIPT=$(base64 -w0 load-fwctl.sh)
 ~~~
 
 Now we can generate the machineconfig file that will substitute in the kernel module variable (FWCTL_SCRIPT) into the machineconfig.
