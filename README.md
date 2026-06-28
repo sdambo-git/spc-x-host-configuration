@@ -1703,23 +1703,29 @@ If everything looks okay we can move onto the next section.
 There is an issue that we can see in NIC Configuration Daemon logs, that fwctl.ko and mlx5_fwctl.ko modules aren't loaded on the worker nodes in order for client commands to work.  In order to workaround this issue we will use a systemd one shot script that will load the module for us.  The first step is to generate the base64 encoding of the script.
 
 ~~~bash
-FWCTL_SCRIPT=$(base64 -w0 << 'EOF'
+cat <<EOF > load-fwctl.shh
 #!/bin/bash
-if lsmod | grep -q mlx5_fwctl; then
-  echo "fwctl already loaded"; exit 0
-fi
+# Fixed: check MOFED first (exit 1 to retry if not running), then check if module loaded
 CID=$(crictl ps --name mofed-container --state running -q 2>/dev/null | head -1)
 if [ -z "$CID" ]; then
-  echo "MOFED container not found"; exit 1
+  echo "MOFED container not found, will retry"; exit 1
 fi
 echo "Found MOFED container: $CID"
+if lsmod | grep -q mlx5_fwctl; then
+  echo "mlx5_fwctl already loaded"; exit 0
+fi
 KERN=$(uname -r)
 MOD=/lib/modules/${KERN}/extra/mlnx-ofa_kernel/drivers/fwctl
-crictl exec "$CID" insmod ${MOD}/fwctl.ko
+crictl exec "$CID" insmod ${MOD}/fwctl.ko 2>/dev/null || true
 crictl exec "$CID" insmod ${MOD}/mlx5/mlx5_fwctl.ko
 lsmod | grep -q mlx5_fwctl && echo "fwctl modules loaded successfully" || { echo "Failed to load fwctl"; exit 1; }
 EOF
-)
+~~~
+
+Create base64 variable from it:
+
+~~~bash
+FWCTL_SCRIPT=$(base64 -w0 load-fwctl.sh)
 ~~~
 
 Now we can generate the machineconfig file that will substitute in the kernel module variable (FWCTL_SCRIPT) into the machineconfig.
@@ -1753,7 +1759,6 @@ spec:
           After=crio.service kubelet.service
           [Service]
           Type=oneshot
-          RemainAfterExit=yes
           ExecStart=/usr/local/bin/load-fwctl.sh
           [Install]
           WantedBy=multi-user.target
