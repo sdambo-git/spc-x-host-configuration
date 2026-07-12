@@ -1487,6 +1487,7 @@ nncp-mtu-rail5   Available   SuccessfullyConfigured
 nncp-mtu-rail6   Available   SuccessfullyConfigured
 nncp-mtu-rail7   Available   SuccessfullyConfigured
 ~~~
+## Set SNNP for each rail interface
 
 Now we need to provide some settings via a SriovNetworkNodePolicy for each rail interface.  An example of the policy which provides the `switchdev` mode, mtu and vfs count is below.
 
