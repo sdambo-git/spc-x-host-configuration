@@ -31,6 +31,34 @@ The host environment for this document was a 5 node cluster where the control pl
 
 <img src="spx.jpg" style="width: 1000px;" border=0/>
 
+## Create the NGC staging pull secret
+
+The `nvcr.io/nvstaging` registry requires an NGC API key. Create the secret in the operator
+namespace before applying the policy:
+
+```bash
+oc create secret docker-registry ngc-staging-secret \
+  -n nvidia-network-operator \
+  --docker-server=nvcr.io \
+  --docker-username='$oauthtoken' \
+  --docker-password=<YOUR_NGC_API_KEY>
+```
+> Replace `<YOUR_NGC_API_KEY>` with your NGC personal API key from
+> [https://org.ngc.nvidia.com/setup/api-key](https://org.ngc.nvidia.com/setup/api-key).
+
+#### Reference the secret in `ncp-spectrumx.yaml`
+
+Add `imagePullSecrets` to the `ofedDriver` spec:
+
+```yaml
+ofedDriver:
+  repository: nvcr.io/nvstaging/mellanox
+  image: doca-driver
+  version: doca3.4.0-26.04-0.5.3.0-0
+  imagePullSecrets:
+  - ngc-staging-secret
+```
+
 ## Set Core User Password for Troubleshooting
 
 This section is completely optional but might be useful in the event network connectivity is lost to one of the OpenShift nodes.   Here we will configure a password for the core user so we can login via the console if necessary.  
