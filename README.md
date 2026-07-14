@@ -2024,14 +2024,6 @@ $ oc get pods
 NAME                               READY   STATUS    RESTARTS   AGE
 nvidiatools-dell-h200-2-workload   1/1     Running   0          9s
 nvidiatools-dell-h200-3-workload   1/1     Running   0          18s
-~~~
-
-Pay attention! In most cases the workload pods will not start,they will get stuck on ContainerCreating because of missing `ovs` binary in /var/lib/cni/bin. this binary comes as part of Openshift Virtualization operator
-The cluster-network-addons-operator (CNAO) is deployed in openshift-cnv but no NetworkAddonsConfig CR existed. Without this CR, CNAO never deployed the ovs-cni-amd64 DaemonSet, which is responsible for copying the ovs binary into /var/lib/cni/bin on worker nodes:
-
-~~~bash
-
-
 
 Now open two terminals and rsh into each of the pods.  We need to grab the ip addresses to populate the `mpirun` command with the ip addresses of the pods.
 
