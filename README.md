@@ -18,6 +18,7 @@
 - [Configuring NVIDIA GPU Operator](#configuring-nvidia-gpu-operator)
 - [Configuring LLDPD Daemonset](#configuring-lldpd-daemonset)
 - [Configuring OVS Offload](#configuring-ovs-offload)
+- [Configuring RDMA and Networking Namespace](#Configuring-RDMA-and-Networking-Namespace)
 - [Configure Physical Rail Interface Attributes](#configure-physical-rail-interface-attributes)
 - [Configure Spectrum-X CNI](#configure-spectrum-x-CNI)
 - [FWCTL Kernel Module Required for NIC Configuration Daemon](#fwctl-kernel-module-required-for-nic-configuration-daemon)
@@ -1434,6 +1435,25 @@ system_version      : "9.6"
 ~~~
 
 If everything looks good we can move onto the next section.
+
+## Configuring RDMA and Networking Namespace
+This section replaces the MC that set the netns, In which actually the SRIOV Operator set it by using Pool Config:
+
+~~~bash
+$ cat <<EOF > sriovnetworkpoolconfig-rdma.yaml 
+apiVersion: sriovnetwork.openshift.io/v1
+kind: SriovNetworkPoolConfig
+metadata:
+  name: rdma-workers
+  namespace: openshift-sriov-network-operator 
+spec:
+  maxUnavailable: 1
+  rdmaMode: shared
+  nodeSelector:
+    matchLabels:
+      node-role.kubernetes.io/worker: ""
+EOF
+~~~
 
 ## Configure Physical Rail Interface Attributes
 
