@@ -18,6 +18,7 @@
 - [Configuring NVIDIA GPU Operator](#configuring-nvidia-gpu-operator)
 - [Configuring LLDPD Daemonset](#configuring-lldpd-daemonset)
 - [Configuring OVS Offload](#configuring-ovs-offload)
+- [Configuring RDMA and Networking Namespace](#Configuring-RDMA-and-Networking-Namespace)
 - [Configure Physical Rail Interface Attributes](#configure-physical-rail-interface-attributes)
 - [Configure Spectrum-X CNI](#configure-spectrum-x-CNI)
 - [FWCTL Kernel Module Required for NIC Configuration Daemon](#fwctl-kernel-module-required-for-nic-configuration-daemon)
