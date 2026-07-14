@@ -346,6 +346,13 @@ sriov-network-operator-6f7db94664-wn4f7   1/1     Running   0          69m
 
 If everything looks good we can move onto the next section of the document.
 
+###Pay Attention! The Validation Tests podes in Later steps will be get stuck because of missing ovs-cni binaries (like ovs ) in /var/lib/cni/bin. In order to solve it we need to patch the openshift sriov operator subscription with ovs-cni
+                  plugin image from nvidia:
+~~~bash
+oc patch subscription sriov-network-operator-subscription -n openshift-sriov-network-operator --type=merge -p '{"spec":{"config":{"env":[{"name":"OVS_CNI_IMAGE","value":"nvcr.io/nvidia/mellanox/ovs-cni-plugin:network-operator-v26.1.0"}]}}}'
+~~~
+the image version should be aligned to our NNO version.
+
 ## Configuring NMState Operator
 
 There will be a need to configure network interfaces on the nodes that were not configured at initial cluster creation time and the NMState operator is designed for those use cases. The first step is to create a custom resource file that contains the namespace, operator group and subscription.
