@@ -5,6 +5,7 @@
 ## Workflow Sections
 
 - [Environment](#environment)
+- [Create the NGC staging pull secret](#Create-the-NGC-staging-pull-secret)
 - [Set Core User Password for Troubleshooting](#set-core-user-password-for-troubleshooting)
 - [Set Hugepages and IOMMU off](#set-hugepages-and-iommu-off)
 - [Set RDMA Subsystem Namespace Awareness](#set-rdma-subsystem-namespace-awareness)
