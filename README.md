@@ -479,8 +479,9 @@ spec:
           cpu: 1000m
           memory: 10000Mi
       image: nic-configuration-operator-daemon
-      repository: nvcr.io/nvstaging/mellanox
-      version: network-operator-v26.1.1-rc.7
+      imagePullSecrets: []
+      repository: nvcr.io/nvidia/mellanox
+      version: network-operator-v26.1.0
     logLevel: debug
     nicFirmwareStorage:
       availableStorageSize: 1Gi
@@ -496,11 +497,13 @@ spec:
           cpu: 1000m
           memory: 10000Mi
       image: nic-configuration-operator
+      imagePullSecrets: []
       repository: nvcr.io/nvidia/mellanox
       version: network-operator-v26.1.0
   nvIpam:
     enableWebhook: false
     image: nvidia-k8s-ipam
+    imagePullSecrets: []
     repository: nvcr.io/nvidia/mellanox
     version: network-operator-v26.1.0
   ofedDriver:
@@ -509,13 +512,14 @@ spec:
       value: "true"
     forcePrecompiled: false
     image: doca-driver
+    imagePullSecrets: []
     livenessProbe:
       initialDelaySeconds: 30
       periodSeconds: 30
     readinessProbe:
       initialDelaySeconds: 10
       periodSeconds: 30
-    repository: nvcr.io/nvstaging/mellanox
+    repository: nvcr.io/nvidia/mellanox
     startupProbe:
       initialDelaySeconds: 10
       periodSeconds: 20
@@ -529,9 +533,16 @@ spec:
         timeoutSeconds: 300
       maxParallelUpgrades: 1
       safeLoad: false
-    version: doca3.4.0-26.04-0.5.3.0-0
+    version: doca3.3.0-26.01-1.0.0.0-0
+  secondaryNetwork:             
+    cniPlugins:
+      image: plugins
+      imagePullSecrets: []
+      repository: nvcr.io/nvidia/mellanox
+      version: network-operator-v26.1.0  
   spectrumXOperator:
     image: spectrum-x-operator
+    imagePullSecrets: []
     repository: nvcr.io/nvidia/mellanox
     version: network-operator-v26.1.0
 EOF
