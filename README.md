@@ -8,7 +8,6 @@
 - [Create the NGC staging pull secret](#Create-the-NGC-staging-pull-secret)
 - [Set Core User Password for Troubleshooting](#set-core-user-password-for-troubleshooting)
 - [Set Hugepages and IOMMU off](#set-hugepages-and-iommu-off)
-- [Set RDMA Subsystem Namespace Awareness](#set-rdma-subsystem-namespace-awareness)
 - [Set UDEV Rules for Rail Device Names](#set-udev-rules-for-rail-device-names)
 - [Configuring NFD Operator](#configuring-nfd-operator)
 - [Configuring SRIOV Operator](#configuring-sriov-operator)
@@ -141,47 +140,6 @@ machineconfig.machineconfiguration.openshift.io/99-kernel-args-hugepages created
 ~~~
 
 To validate this has been configured we can use `dmesg` output and `oc describe node` to see iommu and hughpages are set or even better with `cat /proc/cmdline` in each node.
-
-## Set RDMA Subsystem Namespace Awareness
-
-Next we need to enable RDMA device namespace separation, which is essential for proper namespace resource isolation in containerized environments.  First we need to base64 encode the contents of our ib_core.conf file.
-
-~~~bash
-$ IB_CORE=$(echo "options ib_core netns_mode=0" | base64 -w 0)
-~~~
-
-Once we have the base64 encoding assigned to the variable we can generate the machine configuration yaml that will be used to create the file on the workers in the cluster.
-
-~~~bash
-$ cat <<EOF > 99-worker-ib-core-netns.yaml
-apiVersion: machineconfiguration.openshift.io/v1
-kind: MachineConfig
-metadata:
-  labels:
-    machineconfiguration.openshift.io/role: worker
-  name: 99-worker-ib-core-netns
-spec:
-  config:
-    ignition:
-      version: 3.2.0
-    storage:
-      files:
-      - contents:
-          source: data:text/plain;base64,${IB_CORE}
-        mode: 420
-        overwrite: true
-        path: /etc/modprobe.d/ib_core.conf
-EOF
-~~~
-
-Now we can create the machine configuration on the cluster.  This will cause nodes to reboot in a rolling fashion and can be monitored with `oc get mcp`.
-
-~~~bash
-$ oc create -f 99-worker-ib-core-netns.yaml 
-machineconfig.machineconfiguration.openshift.io/99-worker-ib-core-netns created
-~~~
-
-Once all the workers have rebooted and the `oc get mcp` no longer indicates it updating we can continue on to the next section.
 
 ## Set UDEV Rules for Rail Device Names
 
@@ -1211,6 +1169,25 @@ system_version      : "9.6"
 ~~~
 
 If everything looks good we can move onto the next section.
+
+## Configuring RDMA and Networking Namespace
+This section replaces the MC that set the netns, In which actually the SRIOV Operator set it by using Pool Config:
+
+~~~bash
+$ cat <<EOF > sriovnetworkpoolconfig-rdma.yaml 
+apiVersion: sriovnetwork.openshift.io/v1
+kind: SriovNetworkPoolConfig
+metadata:
+  name: rdma-workers
+  namespace: openshift-sriov-network-operator 
+spec:
+  maxUnavailable: 1
+  rdmaMode: shared
+  nodeSelector:
+    matchLabels:
+      node-role.kubernetes.io/worker: ""
+EOF
+~~~
 
 ## Configure Physical Rail Interface Attributes
 
