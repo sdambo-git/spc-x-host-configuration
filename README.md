@@ -1183,7 +1183,7 @@ metadata:
   namespace: openshift-sriov-network-operator 
 spec:
   maxUnavailable: 1
-  rdmaMode: shared
+  rdmaMode: exclusive
   nodeSelector:
     matchLabels:
       node-role.kubernetes.io/worker: ""
