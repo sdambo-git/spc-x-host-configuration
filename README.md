@@ -1190,6 +1190,22 @@ spec:
 EOF
 ~~~
 
+Create the SriovNetworkPoolConfig on the cluster.
+
+~~~bash
+$ oc create -f sriovnetworkpoolconfig-rdma.yaml 
+sriovnetworkpoolconfig.sriovnetwork.openshift.io/rdma-workers created
+~~~
+
+To validate it is runing
+
+~~~bash
+oc get mcp
+NAME     CONFIG                                             UPDATED   UPDATING   DEGRADED   MACHINECOUNT   READYMACHINECOUNT   UPDATEDMACHINECOUNT   DEGRADEDMACHINECOUNT   AGE
+master   rendered-master-c93eac8442c2f02f98744da7e751b34e   True      False      False      3              3                   3                     0                      3d16h
+worker   rendered-worker-4fdb375fcf1e5d654687e1ba8c96e878   False     False      False      2              1                   2                     0                      3d16h
+~~~
+
 ## Configure Physical Rail Interface Attributes
 
 The physical rail attributes will be configured in two ways first at the physical interface with NodeNetworkConfigurationPolicy and then at the virtual function interface via the SriovNetworkNodePolicy.   First for each rail, which normally will be 0-7, we need to configure a NodeNetworkConfigurationPolicy for each rail.  The following example for rail0 is below the only difference for each rail will be the rail name.
