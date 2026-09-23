@@ -1,0 +1,41 @@
+# 
+# MachineConfig: disable PCIe ACS on the GPUDirect-RDMA data path on the worker
+# (GPU) nodes, at every boot.
+#
+apiVersion: machineconfiguration.openshift.io/v1
+kind: MachineConfig
+metadata:
+  labels:
+    machineconfiguration.openshift.io/role: worker
+  name: 99-worker-disable-pcie-acs
+spec:
+  config:
+    ignition:
+      version: 3.5.0
+    storage:
+      files:
+        - path: /usr/local/bin/disable-acs.sh
+          mode: 0755
+          overwrite: true
+          contents:
+            source: data:text/plain;charset=utf-8;base64,IyEvYmluL2Jhc2gKIyA9PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09CiMgZGlzYWJsZS1hY3Muc2gKIwojIERpc2FibGUgUENJZSBBQ1MgKEFjY2VzcyBDb250cm9sIFNlcnZpY2VzKSBPTkxZIG9uIHRoZSBkZXZpY2VzIHRoYXQgc2l0IG9uIHRoZQojIEdQVURpcmVjdC1SRE1BIGRhdGEgcGF0aCwgaS5lLiBldmVyeSBOVklESUEgR1BVIGFuZCBldmVyeSBOVklESUEtbmV0d29ya2luZwojIChNZWxsYW5veC9CbHVlRmllbGQvQ29ubmVjdFgpIGVuZHBvaW50LCBQTFVTIGV2ZXJ5IFBDSWUgYnJpZGdlIChzd2l0Y2ggcG9ydCAvCiMgcm9vdCBwb3J0KSBiZXR3ZWVuIHRob3NlIGVuZHBvaW50cyBhbmQgdGhlIHJvb3QgY29tcGxleC4KIwojIElkZW1wb3RlbnQ6IHdyaXRpbmcgdGhlIEFDUyBjb250cm9sIHJlZ2lzdGVyIHRvIDAgdHdpY2UgaXMgYSBuby1vcC4gU2FmZSB0bwojIHJ1biBhdCBldmVyeSBib290IChzZWUgZGlzYWJsZS1hY3Muc2VydmljZSkuCiMgPT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PQpzZXQgLXUKCiMgbXVzdCBiZSByb290IHRvIGFjY2VzcyBleHRlbmRlZCBQQ0kgY29uZmlnIHNwYWNlCmlmIFsgIiRFVUlEIiAtbmUgMCBdOyB0aGVuCiAgZWNobyAiRVJST1I6ICQwIG11c3QgYmUgcnVuIGFzIHJvb3QiID4mMgogIGV4aXQgMQpmaQoKIyBQQ0kgdmVuZG9yIElEcyBvZiB0aGUgZW5kcG9pbnRzIHdob3NlIFAyUCBwYXRocyB3ZSBjYXJlIGFib3V0LgojICAgMTBkZSA9IE5WSURJQSAoR1BVcykgICAxNWIzID0gTWVsbGFub3gvTlZJRElBIG5ldHdvcmtpbmcgKEJsdWVGaWVsZC9Db25uZWN0WCkKVEFSR0VUX1ZFTkRPUlM9IiR7VEFSR0VUX1ZFTkRPUlM6LTEwZGUgMTViM30iCgpTWVM9L3N5cy9idXMvcGNpL2RldmljZXMKCiMgQ29sbGVjdCB0aGUgc2V0IG9mIEJERnMgdG8gYWN0IG9uIChlbmRwb2ludHMgKyB0aGVpciBhbmNlc3RvciBicmlkZ2VzKS4KZGVjbGFyZSAtQSBUQVJHRVRTPSgpCgphZGRfcGF0aF90b19yb290KCkgewogICMgR2l2ZW4gYSBmdWxsIHN5c2ZzIHBhdGggdG8gYSBQQ0kgZGV2aWNlLCBhZGQgaXQgYW5kIGV2ZXJ5IFBDSS1icmlkZ2UKICAjIGFuY2VzdG9yICh1cCB0bywgYnV0IG5vdCBpbmNsdWRpbmcsIHRoZSBob3N0IGJyaWRnZSkgdG8gVEFSR0VUUy4KICBsb2NhbCBwCiAgcD0kKHJlYWRsaW5rIC1mICIkMSIpIHx8IHJldHVybgogIHdoaWxlIFsgLW4gIiRwIiBdICYmIFtbICIkcCIgPT0gKiIvMDAwMDoiKiBdXTsgZG8KICAgIGxvY2FsIGJkZgogICAgYmRmPSQoYmFzZW5hbWUgIiRwIik7IGJkZj0ke2JkZiMwMDAwOn0KICAgIFRBUkdFVFNbIiRiZGYiXT0xCiAgICBwPSQoZGlybmFtZSAiJHAiKQogIGRvbmUKfQoKZm9yIHZlbmRvciBpbiAkVEFSR0VUX1ZFTkRPUlM7IGRvCiAgZm9yIGRldiBpbiAiJFNZUyIvKjsgZG8KICAgIFsgLWUgIiRkZXYvdmVuZG9yIiBdIHx8IGNvbnRpbnVlCiAgICB2PSQoY2F0ICIkZGV2L3ZlbmRvciIgMj4vZGV2L251bGwpCiAgICBbICIkdiIgPSAiMHgke3ZlbmRvcn0iIF0gfHwgY29udGludWUKICAgIGFkZF9wYXRoX3RvX3Jvb3QgIiRkZXYiCiAgZG9uZQpkb25lCgppZiBbICIkeyNUQVJHRVRTW0BdfSIgLWVxIDAgXTsgdGhlbgogIGVjaG8gIldBUk46IG5vIGRldmljZXMgbWF0Y2hlZCB2ZW5kb3JzIFskVEFSR0VUX1ZFTkRPUlNdOyBub3RoaW5nIHRvIGRvIiA+JjIKICBleGl0IDAKZmkKCmNoYW5nZWQ9MCBza2lwcGVkPTAKZm9yIEJERiBpbiAkKHByaW50ZiAnJXNcbicgIiR7IVRBUkdFVFNbQF19IiB8IHNvcnQpOyBkbwoKICAjIHNraXAgaWYgdGhpcyBkZXZpY2UgZG9lcyBub3QgaW1wbGVtZW50IHRoZSBBQ1MgY2FwYWJpbGl0eQogIGlmICEgc2V0cGNpIC12IC1zICIke0JERn0iIEVDQVBfQUNTKzB4Ni53ID4gL2Rldi9udWxsIDI+JjE7IHRoZW4KICAgIGVjaG8gIiR7QkRGfSBkb2VzIG5vdCBzdXBwb3J0IEFDUywgc2tpcHBpbmciCiAgICBza2lwcGVkPSQoKHNraXBwZWQrMSkpCiAgICBjb250aW51ZQogIGZpCgogIGVjaG8gIkRpc2FibGluZyBBQ1Mgb24gJHtCREZ9IgogIHNldHBjaSAtdiAtcyAiJHtCREZ9IiBFQ0FQX0FDUysweDYudz0wMDAwCiAgY2hhbmdlZD0kKChjaGFuZ2VkKzEpKQoKZG9uZQoKZWNobyAiZGlzYWJsZS1hY3M6IGNsZWFyZWQgQUNTIG9uICR7Y2hhbmdlZH0gZGV2aWNlKHMpLCBza2lwcGVkICR7c2tpcHBlZH0gKG5vIEFDUyBjYXApIgo=
+    systemd:
+      units:
+        - name: disable-acs.service
+          enabled: true
+          contents: |
+            [Unit]
+            Description=Disable PCIe ACS on NVIDIA GPU / NIC P2P paths (GPUDirect RDMA)
+            Documentation=man:setpci(8)
+            # ACS lives in extended PCI config space; devices must be enumerated first.
+            After=systemd-udev-settle.service
+            Wants=systemd-udev-settle.service
+            # Registers persist until reboot / FLR, so run once per boot, before
+            # the container runtime so pods never see the stock (ACS-on) state.
+            Before=crio.service kubelet.service
+            [Service]
+            Type=oneshot
+            RemainAfterExit=yes
+            ExecStart=/usr/local/bin/disable-acs.sh
+            [Install]
+            WantedBy=multi-user.target

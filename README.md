@@ -4,26 +4,30 @@
 
 ## Workflow Sections
 
-- [Environment](#environment)
-- [Create the NGC staging pull secret](#Create-the-NGC-staging-pull-secret)
-- [Set Core User Password for Troubleshooting](#set-core-user-password-for-troubleshooting)
-- [Set Hugepages and IOMMU off](#set-hugepages-and-iommu-off)
-- [Set UDEV Rules for Rail Device Names](#set-udev-rules-for-rail-device-names)
-- [Configuring NFD Operator](#configuring-nfd-operator)
-- [Configuring SRIOV Operator](#configuring-sriov-operator)
-- [Configuring NMState Operator](#configuring-nmstate-operator)
-- [Configuring NVIDIA Network Operator](#configuring-nvidia-network-operator)
-- [Configuring NVIDIA Maintenance Operator](#configuring-nvidia-maintenance-operator)
-- [Configuring Nic Firmware](#configuring-nic-firmware)
-- [Configuring NVIDIA GPU Operator](#configuring-nvidia-gpu-operator)
-- [Configuring LLDPD Daemonset](#configuring-lldpd-daemonset)
-- [Configuring OVS Offload](#configuring-ovs-offload)
-- [Configuring RDMA and Networking Namespace](#Configuring-RDMA-and-Networking-Namespace)
-- [Configure Physical Rail Interface Attributes](#configure-physical-rail-interface-attributes)
-- [Configure Spectrum-X CNI](#configure-spectrum-x-CNI)
-- [FWCTL Kernel Module Required for NIC Configuration Daemon](#fwctl-kernel-module-required-for-nic-configuration-daemon)
-- [Validate Spectrum-X Topology](#validate-spectrum-x-topology)
-- [Performance Testing and Troubleshooting](#performance-testing-and-troubleshooting)
+- [Spectrum-X Host Configuration on OpenShift](#spectrum-x-host-configuration-on-openshift)
+  - [Workflow Sections](#workflow-sections)
+  - [Environment](#environment)
+  - [Create the NGC staging pull secret](#create-the-ngc-staging-pull-secret)
+      - [Reference the secret in `ncp-spectrumx.yaml`](#reference-the-secret-in-ncp-spectrumxyaml)
+  - [Set Core User Password for Troubleshooting](#set-core-user-password-for-troubleshooting)
+  - [Set Hugepages and IOMMU off](#set-hugepages-and-iommu-off)
+  - [Set UDEV Rules for Rail Device Names](#set-udev-rules-for-rail-device-names)
+  - [Disable ACS in all NVIDIA PCIe devices](#disable-acs-in-all-nvidia-pcie-devices)
+  - [Configuring NFD Operator](#configuring-nfd-operator)
+  - [Configuring SRIOV Operator](#configuring-sriov-operator)
+  - [Configuring NMState Operator](#configuring-nmstate-operator)
+  - [Configuring NVIDIA Network Operator](#configuring-nvidia-network-operator)
+  - [Configuring NVIDIA Maintenance Operator](#configuring-nvidia-maintenance-operator)
+  - [Configuring Nic Firmware](#configuring-nic-firmware)
+  - [Configuring NVIDIA GPU Operator](#configuring-nvidia-gpu-operator)
+  - [Configuring LLDPD Daemonset](#configuring-lldpd-daemonset)
+  - [Configuring OVS Offload](#configuring-ovs-offload)
+  - [Configuring RDMA and Networking Namespace](#configuring-rdma-and-networking-namespace)
+  - [Configure Physical Rail Interface Attributes](#configure-physical-rail-interface-attributes)
+  - [Configure Spectrum-X CNI](#configure-spectrum-x-cni)
+  - [FWCTL Kernel Module Required for NIC Configuration Daemon](#fwctl-kernel-module-required-for-nic-configuration-daemon)
+  - [Validate Spectrum-X Topology](#validate-spectrum-x-topology)
+  - [Performance Testing and Troubleshooting](#performance-testing-and-troubleshooting)
 
 
 ## Environment
@@ -225,6 +229,15 @@ sh-5.1# ip link|grep rail
 12: eth_rail5: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc mq state UP mode DEFAULT group default qlen 1000
 15: eth_rail6: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc mq state UP mode DEFAULT group default qlen 1000
 17: eth_rail7: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc mq state UP mode DEFAULT group default qlen 1000
+~~~
+
+## Disable ACS in all NVIDIA PCIe devices
+
+When ACS (Advanced Control Services) is enabled, it can degrade performance on the Spectrum-X fabric. The following machine config will make sure ACS is disabled at boot time in the worker nodes.
+
+~~~bash
+$ oc create -f config/machineconfig-worker-disable-acs.yaml
+machineconfig.machineconfiguration.openshift.io/99-worker-disable-pcie-acs created
 ~~~
 
 ## Configuring NFD Operator
@@ -2019,379 +2032,68 @@ If everything checks out we should have a peek busbw over the actual line rate. 
 First check that ATS_ENABLED is set to zero which implies disabled.
 
 ~~~bash
-[root@nvidiatools-dell-h200-2-workload ~]# for device in `mst status -v|grep BlueField|awk {'print $3'}` ; do mlxconfig -d $device --yes q ATS_ENABLED; done
-
-Device #1:
-----------
-
-Device type:        BlueField3          
-Name:               900-9D3D4-00EN-HA0_Ax
-Description:        Nvidia BlueField-3 B3140H E-series HHHL SuperNIC; 400GbE (default mode) / NDR IB; Single-port QSFP112; PCIe Gen5.0 x16; 8 Arm cores; 16GB on board DDR; integrated BMC; Crypto Enabled
-Device:             cc:00.0             
-
-Configurations:                                          Next Boot
-        ATS_ENABLED                                 False(0)            
-
-Device #1:
-----------
-
-Device type:        BlueField3          
-Name:               900-9D3D4-00EN-HA0_Ax
-Description:        Nvidia BlueField-3 B3140H E-series HHHL SuperNIC; 400GbE (default mode) / NDR IB; Single-port QSFP112; PCIe Gen5.0 x16; 8 Arm cores; 16GB on board DDR; integrated BMC; Crypto Enabled
-Device:             ba:00.0             
-
-Configurations:                                          Next Boot
-        ATS_ENABLED                                 False(0)            
-
-Device #1:
-----------
-
-Device type:        BlueField3          
-Name:               900-9D3D4-00EN-HA0_Ax
-Description:        Nvidia BlueField-3 B3140H E-series HHHL SuperNIC; 400GbE (default mode) / NDR IB; Single-port QSFP112; PCIe Gen5.0 x16; 8 Arm cores; 16GB on board DDR; integrated BMC; Crypto Enabled
-Device:             3a:00.0             
-
-Configurations:                                          Next Boot
-        ATS_ENABLED                                 False(0)            
-
-Device #1:
-----------
-
-Device type:        BlueField3          
-Name:               900-9D3B6-00CV-A_Ax 
-Description:        NVIDIA BlueField-3 B3220 P-Series FHHL DPU; 200GbE (default mode) / NDR200 IB; Dual-port QSFP112; PCIe Gen5.0 x16 with x16 PCIe extension option; 16 Arm cores; 32GB on-board DDR; integrated BMC; Crypto Enabled
-Device:             bc:00.1             
-
-Configurations:                                          Next Boot
-        ATS_ENABLED                                 False(0)            
-
-Device #1:
-----------
-
-Device type:        BlueField3          
-Name:               900-9D3D4-00EN-HA0_Ax
-Description:        Nvidia BlueField-3 B3140H E-series HHHL SuperNIC; 400GbE (default mode) / NDR IB; Single-port QSFP112; PCIe Gen5.0 x16; 8 Arm cores; 16GB on board DDR; integrated BMC; Crypto Enabled
-Device:             5d:00.0             
-
-Configurations:                                          Next Boot
-        ATS_ENABLED                                 False(0)            
-
-Device #1:
-----------
-
-Device type:        BlueField3          
-Name:               900-9D3D4-00EN-HA0_Ax
-Description:        Nvidia BlueField-3 B3140H E-series HHHL SuperNIC; 400GbE (default mode) / NDR IB; Single-port QSFP112; PCIe Gen5.0 x16; 8 Arm cores; 16GB on board DDR; integrated BMC; Crypto Enabled
-Device:             ca:00.0             
-
-Configurations:                                          Next Boot
-        ATS_ENABLED                                 False(0)            
-
-Device #1:
-----------
-
-Device type:        BlueField3          
-Name:               900-9D3B6-00CV-A_Ax 
-Description:        NVIDIA BlueField-3 B3220 P-Series FHHL DPU; 200GbE (default mode) / NDR200 IB; Dual-port QSFP112; PCIe Gen5.0 x16 with x16 PCIe extension option; 16 Arm cores; 32GB on-board DDR; integrated BMC; Crypto Enabled
-Device:             5f:00.1             
-
-Configurations:                                          Next Boot
-        ATS_ENABLED                                 False(0)            
-
-Device #1:
-----------
-
-Device type:        BlueField3          
-Name:               900-9D3D4-00EN-HA0_Ax
-Description:        Nvidia BlueField-3 B3140H E-series HHHL SuperNIC; 400GbE (default mode) / NDR IB; Single-port QSFP112; PCIe Gen5.0 x16; 8 Arm cores; 16GB on board DDR; integrated BMC; Crypto Enabled
-Device:             db:00.0             
-
-Configurations:                                          Next Boot
-        ATS_ENABLED                                 False(0)            
-
-Device #1:
-----------
-
-Device type:        BlueField3          
-Name:               900-9D3D4-00EN-HA0_Ax
-Description:        Nvidia BlueField-3 B3140H E-series HHHL SuperNIC; 400GbE (default mode) / NDR IB; Single-port QSFP112; PCIe Gen5.0 x16; 8 Arm cores; 16GB on board DDR; integrated BMC; Crypto Enabled
-Device:             18:00.0             
-
-Configurations:                                          Next Boot
-        ATS_ENABLED                                 False(0)            
-
-Device #1:
-----------
-
-Device type:        BlueField3          
-Name:               900-9D3D4-00EN-HA0_Ax
-Description:        Nvidia BlueField-3 B3140H E-series HHHL SuperNIC; 400GbE (default mode) / NDR IB; Single-port QSFP112; PCIe Gen5.0 x16; 8 Arm cores; 16GB on board DDR; integrated BMC; Crypto Enabled
-Device:             1a:00.0             
-
-Configurations:                                          Next Boot
-        ATS_ENABLED                                 False(0)            
-
-Device #1:
-----------
-
-Device type:        BlueField3          
-Name:               900-9D3D4-00EN-HA0_Ax
-Description:        Nvidia BlueField-3 B3140H E-series HHHL SuperNIC; 400GbE (default mode) / NDR IB; Single-port QSFP112; PCIe Gen5.0 x16; 8 Arm cores; 16GB on board DDR; integrated BMC; Crypto Enabled
-Device:             9b:00.0             
-
-Configurations:                                          Next Boot
-        ATS_ENABLED                                 False(0)            
-
-Device #1:
-----------
-
-Device type:        BlueField3          
-Name:               900-9D3B6-00CV-A_Ax 
-Description:        NVIDIA BlueField-3 B3220 P-Series FHHL DPU; 200GbE (default mode) / NDR200 IB; Dual-port QSFP112; PCIe Gen5.0 x16 with x16 PCIe extension option; 16 Arm cores; 32GB on-board DDR; integrated BMC; Crypto Enabled
-Device:             bc:00.0             
-
-Configurations:                                          Next Boot
-        ATS_ENABLED                                 False(0)            
-
-Device #1:
-----------
-
-Device type:        BlueField3          
-Name:               900-9D3B6-00CV-A_Ax 
-Description:        NVIDIA BlueField-3 B3220 P-Series FHHL DPU; 200GbE (default mode) / NDR200 IB; Dual-port QSFP112; PCIe Gen5.0 x16 with x16 PCIe extension option; 16 Arm cores; 32GB on-board DDR; integrated BMC; Crypto Enabled
-Device:             5f:00.0             
-
-Configurations:                                          Next Boot
-        ATS_ENABLED                                 False(0)            
-
-Device #1:
-----------
-
-Device type:        BlueField3          
-Name:               900-9D3D4-00EN-HA0_Ax
-Description:        Nvidia BlueField-3 B3140H E-series HHHL SuperNIC; 400GbE (default mode) / NDR IB; Single-port QSFP112; PCIe Gen5.0 x16; 8 Arm cores; 16GB on board DDR; integrated BMC; Crypto Enabled
-Device:             4d:00.0             
-
-Configurations:                                          Next Boot
-        ATS_ENABLED                                 False(0)   
+[root@nvidiatools-dell-h200-2-workload ~]# mlxconfig -j /tmp/query.json --yes q ATS_ENABLED > /dev/null
+[root@nvidiatools-dell-h200-2-workload ~]# cat /tmp/query.json | jq -r '["DEVICE_TYPE","NAME","DEVICE","ATS_ENABLED"], (.[] | [.device_type, .name, .device, .tlv_configuration.ATS_ENABLED.next_value]) | @tsv' | column -t
+DEVICE_TYPE  NAME                   DEVICE        ATS_ENABLED
+BlueField3   900-9D3D4-00EN-HA0_Ax  0000:cc:00.0  False(0)
+BlueField3   900-9D3B6-00CV-A_Ax    0000:bc:00.0  False(0)
+BlueField3   900-9D3B6-00CV-A_Ax    0000:5f:00.0  False(0)
+BlueField3   900-9D3D4-00EN-HA0_Ax  0000:4d:00.0  False(0)
+BlueField3   900-9D3D4-00EN-HA0_Ax  0000:ba:00.0  False(0)
+BlueField3   900-9D3D4-00EN-HA0_Ax  0000:3a:00.0  False(0)
+BlueField3   900-9D3D4-00EN-HA0_Ax  0000:5d:00.0  False(0)
+BlueField3   900-9D3D4-00EN-HA0_Ax  0000:ca:00.0  False(0)
+BlueField3   900-9D3D4-00EN-HA0_Ax  0000:db:00.0  False(0)
+BlueField3   900-9D3D4-00EN-HA0_Ax  0000:18:00.0  False(0)
+BlueField3   900-9D3D4-00EN-HA0_Ax  0000:1a:00.0  False(0)
+BlueField3   900-9D3D4-00EN-HA0_Ax  0000:9b:00.0  False(0)
+[root@nvidiatools-dell-h200-2-workload ~]#
 ~~~
 
-Next check that the interfaces have the MaxReadReq set to 4k.
+First, check that the interfaces have the MaxReadReq set to 4k:
 
 ~~~bash
-[root@nvidiatools-dell-h200-2-workload ~]# lspci -vv -d 15b3:a2dc| grep -i MaxReadReq
+[root@nvidiatools-dell-h200-2-workload ~]# lspci -vv -d 15b3:a2dc 2>/dev/null | grep MaxReadReq | sort -u
 			MaxPayload 256 bytes, MaxReadReq 4096 bytes
-			MaxPayload 256 bytes, MaxReadReq 4096 bytes
-			MaxPayload 256 bytes, MaxReadReq 4096 bytes
-			MaxPayload 256 bytes, MaxReadReq 4096 bytes
-			MaxPayload 256 bytes, MaxReadReq 4096 bytes
-			MaxPayload 256 bytes, MaxReadReq 4096 bytes
-			MaxPayload 256 bytes, MaxReadReq 4096 bytes
-			MaxPayload 256 bytes, MaxReadReq 4096 bytes
-			MaxPayload 256 bytes, MaxReadReq 4096 bytes
-			MaxPayload 256 bytes, MaxReadReq 4096 bytes
-			MaxPayload 256 bytes, MaxReadReq 4096 bytes
-			MaxPayload 256 bytes, MaxReadReq 4096 bytes
-			MaxPayload 256 bytes, MaxReadReq 4096 bytes
-			MaxPayload 256 bytes, MaxReadReq 4096 bytes
+[root@nvidiatools-dell-h200-2-workload ~]#
 ~~~
 
-Finally make sure that ACS is disabled.   We can check it by running the following command.
+Any line where MaxReadReq is different to 4096 requires investigating and correcting that specific device.
+
+Then,.make sure that ACS is disabled. This should have been done on the worker by the machine config created earlier:
 
 ~~~bash
-[root@nvidiatools-dell-h200-2-workload ~]# lspci -vv | grep -i "acsctl"
+[root@nvidiatools-dell-h200-2-workload ~]# lspci -vv -d 15b3: 2>/dev/null | egrep ACSCtl | sort -u
 		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
-		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
-		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
-		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
-		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
-		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
-		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
-		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
-		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
-		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
-		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
-		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
-		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
-		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
-		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
-		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
-		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
-		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
-		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
-		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
-		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
-		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
-		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
-		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
-		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
-		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
-		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
-		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
-		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
-		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
-		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
-		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
-		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
-		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
-		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
-		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
-		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
-		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
-		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
-		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
-		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
-		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
-		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
-		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
-		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
-		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
-		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
-		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
-		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
-		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
-		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
-		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
-		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
-		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
-		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
-		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
-		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
-		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
-		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
-		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
-		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
-		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
-		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
-		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
-		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
-		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
-		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
-		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
-		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
-		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
-		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
-		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
-		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
-		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
-		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
-		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
+[root@nvidiatools-dell-h200-2-workload ~]#
 ~~~
 
-If any values have a `+` symbol next to the word then ACS might be enabled.  To disable permanently, at least on Dell systems go into the BIOS and disable virtualization.   As a temporary fix we can use the following script to disable ACS as well.
+If any line has values with a `+` symbol next to the word then ACS might be enabled. One way to change this is to disable Virtualization on the BIOS, but this prevents from running virtual machines, as well as sandboxed and confidential containers.
+
+Log into the workers and verify that the disable-acs.service is active, and that it has actually disabled ACS on the required PCIe devices, or otherwise troubleshoot further with the output on journalctl.
 
 ~~~bash
-[root@nvidiatools-dell-h200-2-workload ~]# cat <<EOF > disable-acs.sh 
-#!/bin/bash
-# must be root to access extended PCI config space
-if [ "$EUID" -ne 0 ]; then
-  echo "ERROR: $0 must be run as root"
-  exit 1
-fi
- 
-for BDF in `lspci -d "*:*:*" | awk '{print $1}'`; do
- 
-    # skip if it doesn't support ACS
-    setpci -v -s ${BDF} ECAP_ACS+0x6.w > /dev/null 2>&1
-    if [ $? -ne 0 ]; then
-            echo "${BDF} does not support ACS, skipping"
-            continue
-    fi
- 
-    echo "Disabling ACS on ${BDF}"
-    setpci -v -s ${BDF} ECAP_ACS+0x6.w=0000
- 
-done
-exit 0
-EOF
-~~~
+[core@dell-h200-2 ~]$ sudo systemctl status disable-acs.service
+● disable-acs.service - Disable PCIe ACS on NVIDIA GPU / NIC P2P paths (GPUDirect RDMA)
+     Loaded: loaded (/etc/systemd/system/disable-acs.service; enabled; preset: disabled)
+     Active: active (exited) since Tue 2026-09-22 16:46:49 UTC; 16h ago
+       Docs: man:setpci(8)
+   Main PID: 4520 (code=exited, status=0/SUCCESS)
+        CPU: 1.950s
 
-Set the execute bit on the script and run it.  Note this needs to be done on all nodes.
-
-~~~bash
-[root@nvidiatools-dell-h200-2-workload ~]# chmod +x disable-acs.sh 
-[root@nvidiatools-dell-h200-2-workload ~]# ./disable-acs.sh |grep Disabling
-Disabling ACS on 00:0a.0
-Disabling ACS on 00:0c.0
-Disabling ACS on 00:0e.0
-Disabling ACS on 15:01.0
-Disabling ACS on 17:00.0
-Disabling ACS on 17:01.0
-Disabling ACS on 17:02.0
-Disabling ACS on 17:03.0
-Disabling ACS on 17:1f.0
-Disabling ACS on 18:00.0
-Disabling ACS on 18:00.1
-Disabling ACS on 1a:00.0
-Disabling ACS on 1a:00.1
-Disabling ACS on 37:01.0
-Disabling ACS on 39:00.0
-Disabling ACS on 39:01.0
-Disabling ACS on 39:02.0
-Disabling ACS on 3a:00.0
-Disabling ACS on 3a:00.1
-Disabling ACS on 48:01.0
-Disabling ACS on 4a:00.0
-Disabling ACS on 4a:01.0
-Disabling ACS on 4a:02.0
-Disabling ACS on 4d:00.0
-Disabling ACS on 4d:00.1
-Disabling ACS on 59:01.0
-Disabling ACS on 5b:00.0
-Disabling ACS on 5b:01.0
-Disabling ACS on 5b:02.0
-Disabling ACS on 5b:03.0
-Disabling ACS on 5b:1f.0
-Disabling ACS on 5d:00.0
-Disabling ACS on 5d:00.1
-Disabling ACS on 5f:00.0
-Disabling ACS on 5f:00.1
-Disabling ACS on 5f:00.2
-Disabling ACS on 80:01.0
-Disabling ACS on 81:00.0
-Disabling ACS on 81:00.1
-Disabling ACS on 82:00.0
-Disabling ACS on 82:01.0
-Disabling ACS on 82:02.0
-Disabling ACS on 82:03.0
-Disabling ACS on 97:01.0
-Disabling ACS on 99:00.0
-Disabling ACS on 99:01.0
-Disabling ACS on 99:02.0
-Disabling ACS on 99:1f.0
-Disabling ACS on 9b:00.0
-Disabling ACS on 9b:00.1
-Disabling ACS on b7:01.0
-Disabling ACS on b9:00.0
-Disabling ACS on b9:01.0
-Disabling ACS on b9:02.0
-Disabling ACS on b9:03.0
-Disabling ACS on ba:00.0
-Disabling ACS on ba:00.1
-Disabling ACS on bc:00.0
-Disabling ACS on bc:00.1
-Disabling ACS on bc:00.2
-Disabling ACS on c7:01.0
-Disabling ACS on c9:00.0
-Disabling ACS on c9:01.0
-Disabling ACS on c9:02.0
-Disabling ACS on c9:03.0
-Disabling ACS on c9:1f.0
-Disabling ACS on ca:00.0
-Disabling ACS on ca:00.1
-Disabling ACS on cc:00.0
-Disabling ACS on cc:00.1
-Disabling ACS on d7:01.0
-Disabling ACS on d9:00.0
-Disabling ACS on d9:01.0
-Disabling ACS on d9:02.0
-Disabling ACS on db:00.0
-Disabling ACS on db:00.1
+Sep 22 16:46:49 dell-h200-2 disable-acs.sh[7749]: 0000:d9:01.0 (ecap 000d @170) @176 0000
+Sep 22 16:46:49 dell-h200-2 disable-acs.sh[4520]: Disabling ACS on d9:02.0
+Sep 22 16:46:49 dell-h200-2 disable-acs.sh[7751]: 0000:d9:02.0 (ecap 000d @170) @176 0000
+Sep 22 16:46:49 dell-h200-2 disable-acs.sh[4520]: Disabling ACS on db:00.0
+Sep 22 16:46:49 dell-h200-2 disable-acs.sh[7753]: 0000:db:00.0 (ecap 000d @230) @236 0000
+Sep 22 16:46:49 dell-h200-2 disable-acs.sh[4520]: Disabling ACS on db:00.1
+Sep 22 16:46:49 dell-h200-2 disable-acs.sh[7755]: 0000:db:00.1 (ecap 000d @230) @236 0000
+Sep 22 16:46:49 dell-h200-2 disable-acs.sh[4520]: dc:00.0 does not support ACS, skipping
+Sep 22 16:46:49 dell-h200-2 disable-acs.sh[4520]: disable-acs: cleared ACS on 60 device(s), skipped 20 (no ACS cap)
+Sep 22 16:46:49 dell-h200-2 systemd[1]: Finished Disable PCIe ACS on NVIDIA GPU / NIC P2P paths (GPUDirect RDMA).
+[core@dell-h200-2 ~]$
 ~~~
 
 After all of this rerun the NCCL job.  If it still does not have performance numbers expected go back and review the entire configuration.
-
-
-
 
 If everything works we should see near line speeds for the data transfer between GPU worker nodes.
