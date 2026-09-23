@@ -2066,6 +2066,8 @@ Then,.make sure that ACS is disabled. This should have been done on the worker b
 [root@nvidiatools-dell-h200-2-workload ~]# lspci -vv -d 15b3: 2>/dev/null | egrep ACSCtl | sort -u
 		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
 [root@nvidiatools-dell-h200-2-workload ~]#
+[root@nvidiatools-dell-h200-2-workload ~]# lspci -vv -d 10de: 2>/dev/null | egrep ACSCtl | sort -u
+[root@nvidiatools-dell-h200-2-workload ~]#
 ~~~
 
 If any line has values with a `+` symbol next to the word then ACS might be enabled. One way to change this is to disable Virtualization on the BIOS, but this prevents from running virtual machines, as well as sandboxed and confidential containers.
