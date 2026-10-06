@@ -153,7 +153,7 @@ interfaces according to the SuperNIC Interfaces Renaming convention. Set the num
 SuperNIC ( NUM_PFS ) based on the NIC breakout configuration (x1, x2 or x4) and set the PF PCI
 addresses ( PCI_ADD ). Obtain these PCI addresses from the `mst status -v` command output.
 
-~~~bashSuperNIC ( NUM_PFS ) based on the NIC breakout configuration (x1, x2 or x4) and set the PF PCI
+~~~bash
 $ cat <<EOF >  NicInterfaceNameTemplate.yaml
 apiVersion: configuration.net.nvidia.com/v1alpha1
 kind: NicInterfaceNameTemplate
@@ -180,42 +180,10 @@ spec:
 EOF
 ~~~
 
-Once we have the udev file created we need to base64 encoded it to prepare it for a machine configuration.  Below will base64 encoded it and then assign it to the variable UDV_RULES.
+We have the yaml file in the config folder in this repository, we should apply it by:
 
 ~~~bash
-$ UDEV_RULES=`cat 70-persistent-net.rules|base64 -w 0`
-~~~
-
-Next we can cat out the machine configuration file below and it will use the UDEV_RULES variable we set above to enbedded the base64 udev rules.
-
-~~~bash
-$ cat <<EOF > 99-machine-config-udev-network.yaml
-apiVersion: machineconfiguration.openshift.io/v1
-kind: MachineConfig
-metadata:
-   labels:
-     machineconfiguration.openshift.io/role: worker
-   name: 99-machine-config-udev-network
-spec:
-   config:
-     ignition:
-       version: 3.2.0
-     storage:
-       files:
-       - contents:
-           source: data:text/plain;charset=utf-8;base64,${UDEV_RULES}
-         filesystem: root
-         mode: 420
-         path: /etc/udev/rules.d/70-persistent-net.rules
-EOF
-~~~
-
-Finally we can create the machine configuration on the cluster.  This will cause nodes to reboot in a rolling fashion and can be monitored with `oc get mcp`.
-pay attention to the output of `oc get mcp` , sometimes is not working well and the worker node/s remain in degraded  true.
-
-~~~bash
-$ oc create -f 99-machine-config-udev-network.yaml
-machineconfig.machineconfiguration.openshift.io/99-machine-config-udev-network created
+$ oc create -f config/nic_interface_name_template/NicInterfaceNameTemplate.yaml
 ~~~
 
 Once the machine configuration has been successfully applied we can validate that its applied by spot checking nodes in a debug pod to confirm the interface names have been set appropriately.
