@@ -185,25 +185,13 @@ We have the yaml file in the config folder in this repository, we should apply i
 ~~~bash
 $ oc create -f config/nic_interface_name_template/NicInterfaceNameTemplate.yaml
 ~~~
-
-Once the machine configuration has been successfully applied we can validate that its applied by spot checking nodes in a debug pod to confirm the interface names have been set appropriately.
+With pfsPerNic​: 2 and netDevicePrefix​: eth_r%rail_id%_p%plane_id%​, the interfaces on both workers are renamed to:
 
 ~~~bash
-$ oc debug node/dell-h200-2
-Starting pod/dell-h200-2-debug-pq95j ...
-To use host binaries, run `chroot /host`. Instead, if you need to access host namespaces, run `nsenter -a -t 1`.
-Pod IP: 10.14.202.16
-If you don't see a command prompt, try pressing enter.
-sh-5.1# chroot /host
-sh-5.1# ip link|grep rail
-4: eth_rail0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc mq state UP mode DEFAULT group default qlen 1000
-6: eth_rail1: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc mq state UP mode DEFAULT group default qlen 1000
-7: eth_rail2: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc mq state UP mode DEFAULT group default qlen 1000
-8: eth_rail3: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc mq state UP mode DEFAULT group default qlen 1000
-11: eth_rail4: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc mq state UP mode DEFAULT group default qlen 1000
-12: eth_rail5: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc mq state UP mode DEFAULT group default qlen 1000
-15: eth_rail6: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc mq state UP mode DEFAULT group default qlen 1000
-17: eth_rail7: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc mq state UP mode DEFAULT group default qlen 1000
+  0000:27:00.0 => eth_r0_p0    0000:27:00.1 => eth_r0_p1
+  0000:e1:00.0 => eth_r1_p0    0000:e1:00.1 => eth_r1_p1
+  0000:bf:00.0 => eth_r2_p0    0000:bf:00.1 => eth_r2_p1
+  0000:c4:00.0 => eth_r3_p0    0000:c4:00.1 => eth_r3_p1
 ~~~
 
 ## Disable ACS in all NVIDIA PCIe devices
