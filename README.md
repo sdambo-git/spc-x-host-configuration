@@ -146,30 +146,37 @@ machineconfig.machineconfiguration.openshift.io/99-kernel-args-hugepages created
 
 To validate this has been configured we can use `dmesg` output and `oc describe node` to see iommu and hughpages are set or even better with `cat /proc/cmdline` in each node.
 
-## Set UDEV Rules for Rail Device Names
+## NIC Interface Name Template
 
-We need to use udev rules to normalize the interface names on each node to eth_rail or roce_rail for ethernet and infiniband respectively.   We can do this by creating a persistent udev rules file indicating the devices which should be the same across all worker nodes in a homogenous cluster.   Below is an example of what that file might look like.  On the GH200 node we only have two interfaces to work with but it gives you an idea.
+Create the NicInterfaceNameTemplate.yaml CRD in the NVIDIA Network Operator to rename the
+interfaces according to the SuperNIC Interfaces Renaming convention. Set the number of PFs per
+SuperNIC ( NUM_PFS ) based on the NIC breakout configuration (x1, x2 or x4) and set the PF PCI
+addresses ( PCI_ADD ). Obtain these PCI addresses from the `mst status -v` command output.
 
-~~~bash
-$ cat <<EOF > 70-persistent-net.rules 
-ACTION=="add", KERNELS=="0000:18:00.0", SUBSYSTEM=="net", NAME="eth_rail0"
-ACTION=="add", KERNELS=="0000:3a:00.0", SUBSYSTEM=="net", NAME="eth_rail1"
-ACTION=="add", KERNELS=="0000:4d:00.0", SUBSYSTEM=="net", NAME="eth_rail2"
-ACTION=="add", KERNELS=="0000:5d:00.0", SUBSYSTEM=="net", NAME="eth_rail3"
-ACTION=="add", KERNELS=="0000:9b:00.0", SUBSYSTEM=="net", NAME="eth_rail4"
-ACTION=="add", KERNELS=="0000:ba:00.0", SUBSYSTEM=="net", NAME="eth_rail5"
-ACTION=="add", KERNELS=="0000:ca:00.0", SUBSYSTEM=="net", NAME="eth_rail6"
-ACTION=="add", KERNELS=="0000:db:00.0", SUBSYSTEM=="net", NAME="eth_rail7"
-
-ACTION=="add", KERNELS=="0000:18:00.0", SUBSYSTEM=="infiniband", PROGRAM="rdma_rename %k NAME_FIXED roce_rail0"
-ACTION=="add", KERNELS=="0000:3a:00.0", SUBSYSTEM=="infiniband", PROGRAM="rdma_rename %k NAME_FIXED roce_rail1"
-ACTION=="add", KERNELS=="0000:4d:00.0", SUBSYSTEM=="infiniband", PROGRAM="rdma_rename %k NAME_FIXED roce_rail2"
-ACTION=="add", KERNELS=="0000:5d:00.0", SUBSYSTEM=="infiniband", PROGRAM="rdma_rename %k NAME_FIXED roce_rail3"
-ACTION=="add", KERNELS=="0000:9b:00.0", SUBSYSTEM=="infiniband", PROGRAM="rdma_rename %k NAME_FIXED roce_rail4"
-ACTION=="add", KERNELS=="0000:ba:00.0", SUBSYSTEM=="infiniband", PROGRAM="rdma_rename %k NAME_FIXED roce_rail5"
-ACTION=="add", KERNELS=="0000:ca:00.0", SUBSYSTEM=="infiniband", PROGRAM="rdma_rename %k NAME_FIXED roce_rail6"
-ACTION=="add", KERNELS=="0000:db:00.0", SUBSYSTEM=="infiniband", PROGRAM="rdma_rename %k NAME_FIXED roce_rail7"
-
+~~~bashSuperNIC ( NUM_PFS ) based on the NIC breakout configuration (x1, x2 or x4) and set the PF PCI
+$ cat <<EOF >  NicInterfaceNameTemplate.yaml
+apiVersion: configuration.net.nvidia.com/v1alpha1
+kind: NicInterfaceNameTemplate
+metadata:
+  name: spectrum-x-interface-names
+  namespace: nvidia-network-operator
+spec:
+  nodeSelector:
+    node-role.kubernetes.io/worker: ""
+  pfsPerNic: 1
+  rdmaDevicePrefix: "roce_r%rail_id%"
+  netDevicePrefix: "eth_r%rail_id%_p%plane_id%"
+  railPciAddresses:
+    - ["0000:18:00.0"]
+    - ["0000:1a:00.0"]
+    - ["0000:3a:00.0"]
+    - ["0000:4d:00.0"]
+    - ["0000:5d:00.0"]
+    - ["0000:9b:00.0"]
+    - ["0000:ba:00.0"]
+    - ["0000:ca:00.0"]
+    - ["0000:cc:00.0"]
+    - ["0000:db:00.0"]
 EOF
 ~~~
 
