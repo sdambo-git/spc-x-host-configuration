@@ -11,7 +11,7 @@
       - [Reference the secret in `ncp-spectrumx.yaml`](#reference-the-secret-in-ncp-spectrumxyaml)
   - [Set Core User Password for Troubleshooting](#set-core-user-password-for-troubleshooting)
   - [Set Hugepages and IOMMU off](#set-hugepages-and-iommu-off)
-  - [Set UDEV Rules for Rail Device Names](#set-udev-rules-for-rail-device-names)
+  - [NIC Interface Name Template](#NIC-Interface-Name-Template)
   - [Disable ACS in all NVIDIA PCIe devices](#disable-acs-in-all-nvidia-pcie-devices)
   - [Configuring NFD Operator](#configuring-nfd-operator)
   - [Configuring SRIOV Operator](#configuring-sriov-operator)
@@ -185,7 +185,7 @@ We have the yaml file in the config folder in this repository, we should apply i
 ~~~bash
 $ oc create -f config/nic_interface_name_template/NicInterfaceNameTemplate.yaml
 ~~~
-With pfsPerNic​: 2 and netDevicePrefix​: eth_r%rail_id%_p%plane_id%​, the interfaces on both workers are renamed to:
+For example With pfsPerNic​: 2 and netDevicePrefix​: eth_r%rail_id%_p%plane_id%​, the interfaces on both workers are renamed to:
 
 ~~~bash
   0000:27:00.0 => eth_r0_p0    0000:27:00.1 => eth_r0_p1
