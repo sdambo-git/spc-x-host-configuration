@@ -452,7 +452,7 @@ spec:
       image: nic-configuration-operator-daemon
       imagePullSecrets: []
       repository: nvcr.io/nvidia/mellanox
-      version: network-operator-v26.1.0
+      version: network-operator-v26.7.0
     logLevel: debug
     nicFirmwareStorage:
       availableStorageSize: 1Gi
@@ -470,13 +470,13 @@ spec:
       image: nic-configuration-operator
       imagePullSecrets: []
       repository: nvcr.io/nvidia/mellanox
-      version: network-operator-v26.1.0
+      version: network-operator-v26.7.0
   nvIpam:
     enableWebhook: false
     image: nvidia-k8s-ipam
     imagePullSecrets: []
     repository: nvcr.io/nvidia/mellanox
-    version: network-operator-v26.1.0
+    version: network-operator-v26.7.0
   ofedDriver:
     env:
     - name: UNLOAD_STORAGE_MODULES
@@ -510,12 +510,16 @@ spec:
       image: plugins
       imagePullSecrets: []
       repository: nvcr.io/nvidia/mellanox
-      version: network-operator-v26.1.0  
+      version: network-operator-v26.7.0  
   spectrumXOperator:
     image: spectrum-x-operator
     imagePullSecrets: []
     repository: nvcr.io/nvidia/mellanox
-    version: network-operator-v26.1.0
+    version: network-operator-v26.7.0
+    xPlane:
+      image: xplane
+      repository: nvcr.io/nvidia/doca
+      version: "3.5.0"
 EOF
 ~~~
 
