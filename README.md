@@ -493,7 +493,8 @@ spec:
       value: "true"
     forcePrecompiled: false
     image: doca-driver
-    imagePullSecrets: []
+    imagePullSecrets:
+      - ngc-secret
     livenessProbe:
       initialDelaySeconds: 30
       periodSeconds: 30
