@@ -439,6 +439,16 @@ kind: NicClusterPolicy
 metadata:
   name: nic-cluster-policy
 spec:
+  global:
+    imagePullSecrets:
+      - ngc-secret
+  nodeAffinity:
+    requiredDuringSchedulingIgnoredDuringExecution:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: feature.node.kubernetes.io/pci-15b3.sriov.capable 
+              operator: In
+              values: ["true"]
   nicConfigurationOperator:
     configurationDaemon:
       containerResources:
@@ -452,7 +462,7 @@ spec:
       image: nic-configuration-operator-daemon
       imagePullSecrets: []
       repository: nvcr.io/nvidia/mellanox
-      version: network-operator-v26.1.0
+      version: network-operator-v26.7.0
     logLevel: debug
     nicFirmwareStorage:
       availableStorageSize: 1Gi
@@ -470,20 +480,21 @@ spec:
       image: nic-configuration-operator
       imagePullSecrets: []
       repository: nvcr.io/nvidia/mellanox
-      version: network-operator-v26.1.0
+      version: network-operator-v26.7.0
   nvIpam:
     enableWebhook: false
     image: nvidia-k8s-ipam
     imagePullSecrets: []
     repository: nvcr.io/nvidia/mellanox
-    version: network-operator-v26.1.0
+    version: network-operator-v26.7.0
   ofedDriver:
     env:
     - name: UNLOAD_STORAGE_MODULES
       value: "true"
     forcePrecompiled: false
     image: doca-driver
-    imagePullSecrets: []
+    imagePullSecrets:
+      - ngc-secret
     livenessProbe:
       initialDelaySeconds: 30
       periodSeconds: 30
@@ -504,18 +515,16 @@ spec:
         timeoutSeconds: 300
       maxParallelUpgrades: 1
       safeLoad: false
-    version: doca3.3.0-26.01-1.0.0.0-0
-  secondaryNetwork:             
-    cniPlugins:
-      image: plugins
-      imagePullSecrets: []
-      repository: nvcr.io/nvidia/mellanox
-      version: network-operator-v26.1.0  
+    version: doca3.5.0-26.07-0.7.7.0-0
   spectrumXOperator:
     image: spectrum-x-operator
     imagePullSecrets: []
     repository: nvcr.io/nvidia/mellanox
-    version: network-operator-v26.1.0
+    version: network-operator-v26.7.0
+    xPlane:
+      image: xplane
+      repository: nvcr.io/nvidia/doca
+      version: "3.5.0041"
 EOF
 ~~~
 
