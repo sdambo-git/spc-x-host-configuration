@@ -439,6 +439,16 @@ kind: NicClusterPolicy
 metadata:
   name: nic-cluster-policy
 spec:
+  global:
+    imagePullSecrets:
+      - ngc-secret
+  nodeAffinity:
+    requiredDuringSchedulingIgnoredDuringExecution:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: feature.node.kubernetes.io/pci-15b3.sriov.capable 
+              operator: In
+              values: ["true"]
   nicConfigurationOperator:
     configurationDaemon:
       containerResources:
@@ -504,13 +514,7 @@ spec:
         timeoutSeconds: 300
       maxParallelUpgrades: 1
       safeLoad: false
-    version: doca3.3.0-26.01-1.0.0.0-0
-  secondaryNetwork:             
-    cniPlugins:
-      image: plugins
-      imagePullSecrets: []
-      repository: nvcr.io/nvidia/mellanox
-      version: network-operator-v26.7.0  
+    version: doca3.5.0-26.07-0.7.7.0-0
   spectrumXOperator:
     image: spectrum-x-operator
     imagePullSecrets: []
@@ -519,7 +523,7 @@ spec:
     xPlane:
       image: xplane
       repository: nvcr.io/nvidia/doca
-      version: "3.5.0"
+      version: "3.5.0041"
 EOF
 ~~~
 
