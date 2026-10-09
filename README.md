@@ -13,6 +13,7 @@
   - [Set Hugepages and IOMMU off](#set-hugepages-and-iommu-off)
   - [NIC Interface Name Template](#NIC-Interface-Name-Template)
   - [Disable ACS in all NVIDIA PCIe devices](#disable-acs-in-all-nvidia-pcie-devices)
+  - [Increase memlock Limit for RDMA](#increase-memlock-limit-for-rdma)
   - [Configuring NFD Operator](#configuring-nfd-operator)
   - [Configuring SRIOV Operator](#configuring-sriov-operator)
   - [Configuring NMState Operator](#configuring-nmstate-operator)
@@ -202,6 +203,28 @@ When ACS (Advanced Control Services) is enabled, it can degrade performance on t
 $ oc create -f config/machineconfig-worker-disable-acs.yaml
 machineconfig.machineconfiguration.openshift.io/99-worker-disable-pcie-acs created
 ~~~
+
+## Increase memlock Limit for RDMA
+
+RDMA workloads need to pin (lock) large amounts of memory. By default CRI-O sets a low `memlock` ulimit on containers, which can cause RDMA applications to fail. Following the [Red Hat OpenShift AI documentation for configuring a cluster for RDMA](https://docs.redhat.com/en/documentation/red_hat_openshift_ai_self-managed/3.5/html/managing_openshift_ai/managing-distributed-workloads_managing-rhoai#configuring-a-cluster-for-rdma_managing-rhoai), we apply a MachineConfig that drops a CRI-O drop-in file setting the default `memlock` ulimit to unlimited (`memlock=-1:-1`) on the worker nodes.
+
+The MachineConfig writes `/etc/crio/crio.conf.d/99-memlock.conf` with the following content:
+
+~~~toml
+[crio.runtime]
+default_ulimits = [
+  "memlock=-1:-1"
+]
+~~~
+
+We have the yaml file in the config folder in this repository, we can apply it by:
+
+~~~bash
+$ oc create -f config/machineconfig-rdma-memlock.yaml
+machineconfig.machineconfiguration.openshift.io/99-worker-rdma-memlock created
+~~~
+
+This will cause the worker nodes to reboot in a rolling fashion, which can be monitored with `oc get mcp`.
 
 ## Configuring NFD Operator
 
