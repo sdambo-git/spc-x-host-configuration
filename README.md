@@ -40,8 +40,11 @@ The host environment for this document was a 5 node cluster where the control pl
 ## Create the NGC staging pull secret
 
 The `nvcr.io/nvstaging` registry requires an NGC API key. Create the secret in the operator
-namespace before applying the policy:
+namespace before applying the policy ( first we need to create the ns with separate command):
 
+```bash
+oc create namespace nvidia-network-operator
+```
 ```bash
 oc create secret docker-registry ngc-staging-secret \
   -n nvidia-network-operator \
@@ -128,7 +131,7 @@ metadata:
   name: 99-kernel-args-hugepages
 spec:
   kernelArguments:
-    - "module_blacklist=irdma"
+    - module_blacklist=irdma
     - default_hugepagesz=1G
     - hugepagesz=1G
     - hugepages=16
@@ -164,20 +167,18 @@ metadata:
 spec:
   nodeSelector:
     node-role.kubernetes.io/worker: ""
-  pfsPerNic: 1
+  pfsPerNic: 2
   rdmaDevicePrefix: "roce_r%rail_id%"
   netDevicePrefix: "eth_r%rail_id%_p%plane_id%"
   railPciAddresses:
-    - ["0000:18:00.0"]
-    - ["0000:1a:00.0"]
-    - ["0000:3a:00.0"]
-    - ["0000:4d:00.0"]
-    - ["0000:5d:00.0"]
-    - ["0000:9b:00.0"]
-    - ["0000:ba:00.0"]
-    - ["0000:ca:00.0"]
-    - ["0000:cc:00.0"]
-    - ["0000:db:00.0"]
+    - ["0000:17:00.0"]
+    - ["0000:39:00.0"]
+    - ["0000:5f:00.0"]
+    - ["0000:70:00.0"]
+    - ["0000:97:00.0"]
+    - ["0000:b9:00.0"]
+    - ["0000:dc:00.0"]
+    - ["0000:ed:00.0"]
 EOF
 ~~~
 
