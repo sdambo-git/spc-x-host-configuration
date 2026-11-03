@@ -40,8 +40,11 @@ The host environment for this document was a 5 node cluster where the control pl
 ## Create the NGC staging pull secret
 
 The `nvcr.io/nvstaging` registry requires an NGC API key. Create the secret in the operator
-namespace before applying the policy:
+namespace before applying the policy ( first we need to create the ns with separate command):
 
+```bash
+oc create namespace nvidia-network-operator
+```
 ```bash
 oc create secret docker-registry ngc-staging-secret \
   -n nvidia-network-operator \
