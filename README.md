@@ -131,7 +131,7 @@ metadata:
   name: 99-kernel-args-hugepages
 spec:
   kernelArguments:
-    - "module_blacklist=irdma"
+    - module_blacklist=irdma
     - default_hugepagesz=1G
     - hugepagesz=1G
     - hugepages=16
