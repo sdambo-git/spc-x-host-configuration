@@ -47,7 +47,7 @@ oc create secret docker-registry ngc-staging-secret \
   -n nvidia-network-operator \
   --docker-server=nvcr.io \
   --docker-username='$oauthtoken' \
-  --docker-password=<YOUR_NGC_API_KEY>
+  --docker-password='YOUR_NGC_API_KEY'
 ```
 > Replace `<YOUR_NGC_API_KEY>` with your NGC personal API key from
 > [https://org.ngc.nvidia.com/setup/api-key](https://org.ngc.nvidia.com/setup/api-key).
