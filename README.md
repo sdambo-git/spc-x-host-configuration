@@ -168,51 +168,6 @@ oc get configmap -n nvidia-network-operator \
 NAME    DATA   AGE
 ra2.3   1      36m
 ~~~
-## NIC Interface Name Template
-
-Create the NicInterfaceNameTemplate.yaml CRD in the NVIDIA Network Operator to rename the
-interfaces according to the SuperNIC Interfaces Renaming convention. Set the number of PFs per
-SuperNIC ( NUM_PFS ) based on the NIC breakout configuration (x1, x2 or x4) and set the PF PCI
-addresses ( PCI_ADD ). Obtain these PCI addresses from the `mst status -v` command output.
-
-~~~bash
-$ cat <<EOF >  NicInterfaceNameTemplate.yaml
-apiVersion: configuration.net.nvidia.com/v1alpha1
-kind: NicInterfaceNameTemplate
-metadata:
-  name: spectrum-x-interface-names
-  namespace: nvidia-network-operator
-spec:
-  nodeSelector:
-    node-role.kubernetes.io/worker: ""
-  pfsPerNic: 2
-  rdmaDevicePrefix: "roce_r%rail_id%"
-  netDevicePrefix: "eth_r%rail_id%_p%plane_id%"
-  railPciAddresses:
-    - ["0000:17:00.0"]
-    - ["0000:39:00.0"]
-    - ["0000:5f:00.0"]
-    - ["0000:70:00.0"]
-    - ["0000:97:00.0"]
-    - ["0000:b9:00.0"]
-    - ["0000:dc:00.0"]
-    - ["0000:ed:00.0"]
-EOF
-~~~
-
-We have the yaml file in the config folder in this repository, we should apply it by:
-
-~~~bash
-$ oc create -f config/nic_interface_name_template/NicInterfaceNameTemplate.yaml
-~~~
-For example With pfsPerNic​: 2 and netDevicePrefix​: eth_r%rail_id%_p%plane_id%​, the interfaces on both workers are renamed to:
-
-~~~bash
-  0000:27:00.0 => eth_r0_p0    0000:27:00.1 => eth_r0_p1
-  0000:e1:00.0 => eth_r1_p0    0000:e1:00.1 => eth_r1_p1
-  0000:bf:00.0 => eth_r2_p0    0000:bf:00.1 => eth_r2_p1
-  0000:c4:00.0 => eth_r3_p0    0000:c4:00.1 => eth_r3_p1
-~~~
 
 ## Disable ACS in all NVIDIA PCIe devices
 
@@ -688,6 +643,53 @@ maintenance-operator-controller-manager-995859f88-vq262   1/1     Running   0   
 ~~~
 
 If everything looks good we can move onto the next section.
+
+## NIC Interface Name Template
+
+Create the NicInterfaceNameTemplate.yaml CRD in the NVIDIA Network Operator to rename the
+interfaces according to the SuperNIC Interfaces Renaming convention. Set the number of PFs per
+SuperNIC ( NUM_PFS ) based on the NIC breakout configuration (x1, x2 or x4) and set the PF PCI
+addresses ( PCI_ADD ). Obtain these PCI addresses from the `mst status -v` command output.
+
+~~~bash
+$ cat <<EOF >  NicInterfaceNameTemplate.yaml
+apiVersion: configuration.net.nvidia.com/v1alpha1
+kind: NicInterfaceNameTemplate
+metadata:
+  name: spectrum-x-interface-names
+  namespace: nvidia-network-operator
+spec:
+  nodeSelector:
+    node-role.kubernetes.io/worker: ""
+  pfsPerNic: 2
+  rdmaDevicePrefix: "roce_r%rail_id%"
+  netDevicePrefix: "eth_r%rail_id%_p%plane_id%"
+  railPciAddresses:
+    - ["0000:17:00.0"]
+    - ["0000:39:00.0"]
+    - ["0000:5f:00.0"]
+    - ["0000:70:00.0"]
+    - ["0000:97:00.0"]
+    - ["0000:b9:00.0"]
+    - ["0000:dc:00.0"]
+    - ["0000:ed:00.0"]
+EOF
+~~~
+
+We have the yaml file in the config folder in this repository, we should apply it by:
+
+~~~bash
+$ oc create -f config/nic_interface_name_template/NicInterfaceNameTemplate.yaml
+~~~
+For example With pfsPerNic​: 2 and netDevicePrefix​: eth_r%rail_id%_p%plane_id%​, the interfaces on both workers are renamed to:
+
+~~~bash
+  0000:27:00.0 => eth_r0_p0    0000:27:00.1 => eth_r0_p1
+  0000:e1:00.0 => eth_r1_p0    0000:e1:00.1 => eth_r1_p1
+  0000:bf:00.0 => eth_r2_p0    0000:bf:00.1 => eth_r2_p1
+  0000:c4:00.0 => eth_r3_p0    0000:c4:00.1 => eth_r3_p1
+~~~
+
 
 ## Configuring Nic Firmware
 
