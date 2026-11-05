@@ -8,7 +8,7 @@
   - [Workflow Sections](#workflow-sections)
   - [Environment](#environment)
   - [Create the NGC staging pull secret](#create-the-ngc-staging-pull-secret)
-      - [Reference the secret in `ncp-spectrumx.yaml`](#reference-the-secret-in-ncp-spectrumxyaml)
+  - [Reference the secret in `ncp-spectrumx.yaml`](#reference-the-secret-in-ncp-spectrumxyaml)
   - [Set Core User Password for Troubleshooting](#set-core-user-password-for-troubleshooting)
   - [Set Hugepages and IOMMU off](#set-hugepages-and-iommu-off)
   - [NIC Interface Name Template](#NIC-Interface-Name-Template)
@@ -150,6 +150,15 @@ machineconfig.machineconfiguration.openshift.io/99-kernel-args-hugepages created
 
 To validate this has been configured we can use `dmesg` output and `oc describe node` to see iommu and hughpages are set or even better with `cat /proc/cmdline` in each node.
 
+## Spectrum-X Ethernet Profile
+
+The Spectrum-X Ethernet profile carries every SuperNIC setting that the reference architecture pins: firmware parameters, RoCE and adaptive-routing state, and the congestion-control parameter set.
+
+~~~bash
+cd ~/spc-x-host-configuration/config/ra2.3-spectrumx-profile
+oc create -f ra2.3-spectrum-x-k8s-profile-configmap.yaml 
+configmap/ra2.3 created
+~~~
 ## NIC Interface Name Template
 
 Create the NicInterfaceNameTemplate.yaml CRD in the NVIDIA Network Operator to rename the
