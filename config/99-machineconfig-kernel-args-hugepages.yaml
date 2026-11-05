@@ -1,0 +1,15 @@
+apiVersion: machineconfiguration.openshift.io/v1
+kind: MachineConfig
+metadata:
+  labels:
+    machineconfiguration.openshift.io/role: worker
+  name: 99-kernel-args-hugepages
+spec:
+  kernelArguments:
+    - module_blacklist=irdma
+    - default_hugepagesz=1G
+    - hugepagesz=1G
+    - hugepages=16
+    - intel_iommu=on
+    - iommu=pt
+    - pci=realloc=on
