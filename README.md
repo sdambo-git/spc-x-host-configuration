@@ -281,6 +281,9 @@ spec:
   enableOperatorWebhook: true
   featureGates:
     manageSoftwareBridges: true
+    dynamicResourceAllocation: true
+  disablePlugins:
+  - mellanox
   logLevel: 2
 EOF
 ~~~
