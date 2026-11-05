@@ -144,7 +144,7 @@ EOF
 Using the file we generated above we can create the machine configuration on the cluster.  This will cause nodes to reboot in a rolling fashion and can be monitored with `oc get mcp`.
 
 ~~~bash
-$ oc create -f 99-machineconfig-kernel-args-hugepages.yaml
+$ oc create -f config/99-machineconfig-kernel-args-hugepages.yaml
 machineconfig.machineconfiguration.openshift.io/99-kernel-args-hugepages created
 ~~~
 
@@ -158,6 +158,15 @@ The Spectrum-X Ethernet profile carries every SuperNIC setting that the referenc
 cd ~/spc-x-host-configuration/config/ra2.3-spectrumx-profile
 oc create -f ra2.3-spectrum-x-k8s-profile-configmap.yaml 
 configmap/ra2.3 created
+~~~
+
+Verify that it was created and picked up:
+
+~~~bash
+oc get configmap -n nvidia-network-operator \
+-l network.nvidia.com/operator.nic-configuration.spectrum-x-profile
+NAME    DATA   AGE
+ra2.3   1      36m
 ~~~
 ## NIC Interface Name Template
 
