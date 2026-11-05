@@ -275,7 +275,7 @@ metadata:
 spec:
   configDaemonNodeSelector:
     feature.node.kubernetes.io/pci-15b3.sriov.capable: 'true'
-    network.nvidia.com/operator.mofed.wait: 'false'
+    network.nvidia.com/operator.nic-configuration.wait: "false"
     node-role.kubernetes.io/worker: '' 
   enableInjector: true
   enableOperatorWebhook: true
