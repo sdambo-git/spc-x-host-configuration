@@ -1,0 +1,4 @@
+# Ignore a specific file
+/config/ra2.3-spectrumx-profile/ra2.3-spectrum-x-k8s-profile-configmap.yaml
+
+# Ignore a directory
