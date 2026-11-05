@@ -153,6 +153,7 @@ To validate this has been configured we can use `dmesg` output and `oc describe 
 ## Spectrum-X Ethernet Profile
 
 The Spectrum-X Ethernet profile carries every SuperNIC setting that the reference architecture pins: firmware parameters, RoCE and adaptive-routing state, and the congestion-control parameter set.
+❗ **Important:** you have to get the file from NVIDIA, either as a customer or as a partner.
 
 ~~~bash
 cd ~/spc-x-host-configuration/config/ra2.3-spectrumx-profile
