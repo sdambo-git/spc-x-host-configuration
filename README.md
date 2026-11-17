@@ -123,13 +123,10 @@ metadata:
   name: 99-kernel-args-hugepages
 spec:
   kernelArguments:
-    - "module_blacklist=irdma"
+    - module_blacklist=irdma
     - default_hugepagesz=1G
     - hugepagesz=1G
-    - hugepages=16
-    - intel_iommu=on
-    - iommu=pt
-    - pci=realloc=on
+    - hugepages=800
 EOF
 ~~~
 
@@ -148,23 +145,23 @@ We need to use udev rules to normalize the interface names on each node to eth_r
 
 ~~~bash
 $ cat <<EOF > 70-persistent-net.rules 
-ACTION=="add", KERNELS=="0000:18:00.0", SUBSYSTEM=="net", NAME="eth_rail0"
-ACTION=="add", KERNELS=="0000:3a:00.0", SUBSYSTEM=="net", NAME="eth_rail1"
-ACTION=="add", KERNELS=="0000:4d:00.0", SUBSYSTEM=="net", NAME="eth_rail2"
-ACTION=="add", KERNELS=="0000:5d:00.0", SUBSYSTEM=="net", NAME="eth_rail3"
-ACTION=="add", KERNELS=="0000:9b:00.0", SUBSYSTEM=="net", NAME="eth_rail4"
-ACTION=="add", KERNELS=="0000:ba:00.0", SUBSYSTEM=="net", NAME="eth_rail5"
-ACTION=="add", KERNELS=="0000:ca:00.0", SUBSYSTEM=="net", NAME="eth_rail6"
-ACTION=="add", KERNELS=="0000:db:00.0", SUBSYSTEM=="net", NAME="eth_rail7"
+ACTION=="add", KERNELS=="0010:03:00.0", SUBSYSTEM=="net", NAME="eth_rail0"
+ACTION=="add", KERNELS=="0010:03:00.1", SUBSYSTEM=="net", NAME="eth_rail1"
+ACTION=="add", KERNELS=="0012:03:00.0", SUBSYSTEM=="net", NAME="eth_rail2"
+ACTION=="add", KERNELS=="0012:03:00.1", SUBSYSTEM=="net", NAME="eth_rail3"
+ACTION=="add", KERNELS=="0002:03:00.0", SUBSYSTEM=="net", NAME="eth_rail4"
+ACTION=="add", KERNELS=="0002:03:00.1", SUBSYSTEM=="net", NAME="eth_rail5"
+ACTION=="add", KERNELS=="0000:03:00.0", SUBSYSTEM=="net", NAME="eth_rail6"
+ACTION=="add", KERNELS=="0000:03:00.1", SUBSYSTEM=="net", NAME="eth_rail7"
 
-ACTION=="add", KERNELS=="0000:18:00.0", SUBSYSTEM=="infiniband", PROGRAM="rdma_rename %k NAME_FIXED roce_rail0"
-ACTION=="add", KERNELS=="0000:3a:00.0", SUBSYSTEM=="infiniband", PROGRAM="rdma_rename %k NAME_FIXED roce_rail1"
-ACTION=="add", KERNELS=="0000:4d:00.0", SUBSYSTEM=="infiniband", PROGRAM="rdma_rename %k NAME_FIXED roce_rail2"
-ACTION=="add", KERNELS=="0000:5d:00.0", SUBSYSTEM=="infiniband", PROGRAM="rdma_rename %k NAME_FIXED roce_rail3"
-ACTION=="add", KERNELS=="0000:9b:00.0", SUBSYSTEM=="infiniband", PROGRAM="rdma_rename %k NAME_FIXED roce_rail4"
-ACTION=="add", KERNELS=="0000:ba:00.0", SUBSYSTEM=="infiniband", PROGRAM="rdma_rename %k NAME_FIXED roce_rail5"
-ACTION=="add", KERNELS=="0000:ca:00.0", SUBSYSTEM=="infiniband", PROGRAM="rdma_rename %k NAME_FIXED roce_rail6"
-ACTION=="add", KERNELS=="0000:db:00.0", SUBSYSTEM=="infiniband", PROGRAM="rdma_rename %k NAME_FIXED roce_rail7"
+ACTION=="add", KERNELS=="0010:03:00.0", SUBSYSTEM=="infiniband", PROGRAM="rdma_rename %k NAME_FIXED roce_rail0"
+ACTION=="add", KERNELS=="0010:03:00.1", SUBSYSTEM=="infiniband", PROGRAM="rdma_rename %k NAME_FIXED roce_rail1"
+ACTION=="add", KERNELS=="0012:03:00.0", SUBSYSTEM=="infiniband", PROGRAM="rdma_rename %k NAME_FIXED roce_rail2"
+ACTION=="add", KERNELS=="0012:03:00.1", SUBSYSTEM=="infiniband", PROGRAM="rdma_rename %k NAME_FIXED roce_rail3"
+ACTION=="add", KERNELS=="0002:03:00.0", SUBSYSTEM=="infiniband", PROGRAM="rdma_rename %k NAME_FIXED roce_rail4"
+ACTION=="add", KERNELS=="0002:03:00.1", SUBSYSTEM=="infiniband", PROGRAM="rdma_rename %k NAME_FIXED roce_rail5"
+ACTION=="add", KERNELS=="0000:03:00.0", SUBSYSTEM=="infiniband", PROGRAM="rdma_rename %k NAME_FIXED roce_rail6"
+ACTION=="add", KERNELS=="0000:03:00.1", SUBSYSTEM=="infiniband", PROGRAM="rdma_rename %k NAME_FIXED roce_rail7"
 
 EOF
 ~~~
@@ -313,7 +310,6 @@ EOF
 
 With the file generated we need to create it on our cluster.
 
-~~~bash
 $ oc create -f sriov-operator-config.yaml
 sriovoperatorconfig.sriovnetwork.openshift.io/default created
 ~~~
