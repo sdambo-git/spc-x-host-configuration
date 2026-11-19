@@ -126,7 +126,7 @@ spec:
     - module_blacklist=irdma
     - default_hugepagesz=1G
     - hugepagesz=1G
-    - hugepages=800
+    - hugepages=4096
 EOF
 ~~~
 
